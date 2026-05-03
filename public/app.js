@@ -3203,15 +3203,87 @@ function renderRecordingItem(r) {
     preload: 'none',
     src: '/api/recordings/' + r.id + '/audio?token=' + encodeURIComponent(CRM.token || '')
   });
+  const aiBlock = h('div', { class: 'rec-ai-block' });
+  loadRecordingAI(r.id, aiBlock);
   return h('li', { class: 'rec-item' },
     h('div', { class: 'rec-meta' },
       h('span', { class: 'rec-dir' }, dirIcon),
       h('b', {}, r.lead_name || r.phone || '—'),
       h('span', { class: 'muted' }, ' · ' + fmtDate(r.created_at, 'relative') + ' · ' + mm + ':' + ss)
     ),
-    audio
+    audio,
+    aiBlock
   );
 }
+
+async function loadRecordingAI(recId, container, retries) {
+  retries = retries || 0;
+  try {
+    const r = await api('api_recording_aiSummary', recId);
+    if (!r || r.status === 'pending') {
+      if (retries === 0) container.innerHTML = '<div class="ai-pending">🤖 AI is analysing this call…</div>';
+      if (retries < 18) {
+        setTimeout(() => loadRecordingAI(recId, container, retries + 1), 10000);
+      } else {
+        container.innerHTML = '<div class="ai-pending muted">⏳ Still processing — refresh in a minute</div>';
+      }
+      return;
+    }
+    if (r.status === 'failed') {
+      container.innerHTML = '<div class="ai-error">⚠️ AI summary failed: ' + esc(r.error || 'unknown') +
+        ' <button class="btn xs" onclick="retryAi(' + recId + ', this)">Retry</button></div>';
+      return;
+    }
+    const sentColor = { positive: '#10b981', neutral: '#64748b', negative: '#ef4444' }[r.sentiment] || '#64748b';
+    const sentLabel = { positive: '😊 Positive', neutral: '😐 Neutral', negative: '😟 Negative' }[r.sentiment] || r.sentiment || '—';
+    container.innerHTML = '';
+    container.appendChild(h('div', { class: 'ai-summary-card' },
+      h('div', { class: 'ai-header' },
+        h('span', { class: 'ai-badge' }, '🤖 AI Summary'),
+        h('span', { class: 'ai-sentiment', style: 'color:' + sentColor }, sentLabel),
+        h('button', { class: 'btn xs ghost', title: 'Re-analyse this call', onclick: () => {
+          api('api_recording_aiReprocess', recId).then(() => loadRecordingAI(recId, container, 0));
+        } }, '↻')
+      ),
+      h('div', { class: 'ai-summary-text' }, r.summary || '—'),
+      r.key_insight ? h('div', { class: 'ai-insight' }, '💡 ' + r.key_insight) : null,
+      r.action_items && r.action_items.length > 0
+        ? h('div', { class: 'ai-actions' },
+            h('div', { class: 'ai-actions-title' }, '✓ Action items'),
+            ...r.action_items.map(a => h('div', { class: 'ai-action-item' }, '• ' + a))
+          )
+        : null,
+      (r.suggested_status_id || r.next_followup_days != null)
+        ? h('div', { class: 'ai-apply-row' },
+            h('button', { class: 'btn sm primary', onclick: async () => {
+              try {
+                await api('api_recording_applySuggestion', recId, { applyStatus: true, applyFollowup: true });
+                toast('✓ Status updated + follow-up scheduled');
+                if (typeof loadLeads === 'function') loadLeads();
+              } catch (e) { toast(e.message, 'err'); }
+            } }, '✓ Apply suggestion'),
+            r.next_followup_days != null
+              ? h('span', { class: 'muted' }, '· schedule callback in ' + r.next_followup_days + ' day(s)')
+              : null
+          )
+        : null,
+      h('details', { class: 'ai-transcript' },
+        h('summary', {}, '📝 Transcript'),
+        h('pre', {}, r.transcript || 'No transcript')
+      )
+    ));
+  } catch (e) {
+    container.innerHTML = '<div class="ai-error muted">AI summary unavailable: ' + esc(e.message) + '</div>';
+  }
+}
+
+window.retryAi = function(id, btn) {
+  if (btn) btn.disabled = true;
+  api('api_recording_aiReprocess', id).then(() => {
+    const block = btn && btn.closest('.rec-ai-block');
+    if (block) loadRecordingAI(id, block, 0);
+  }).catch(e => toast(e.message, 'err'));
+};
 
 function remarksBlock(rs, leadId) {
   const list = h('ul', { class: 'remarks-list' });

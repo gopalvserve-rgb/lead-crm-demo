@@ -980,3 +980,23 @@ CREATE INDEX IF NOT EXISTS idx_customer_remarks_customer ON customer_remarks(cus
 -- One row per (user_id, month). user_id = NULL → org-wide target.
 -- Used by the Monthly Target dashboard to compute Achievement %,
 -- Required Daily Target, Forecast etc.
+
+-- ===========================================================
+-- v15: AI call summary (Gemini 2.5 Flash powered)
+-- Columns added to lead_recordings to hold the AI-generated
+-- transcript, summary, action items, sentiment, and a suggested
+-- next status. The background worker (utils/aiCallSummary.js)
+-- picks up rows where ai_processed_at IS NULL and fills these in.
+-- ===========================================================
+ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS transcript          TEXT;
+ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS summary             TEXT;
+ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS action_items        TEXT;
+ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS sentiment           TEXT;
+ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS suggested_status_id INTEGER REFERENCES statuses(id) ON DELETE SET NULL;
+ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS next_followup_days  INTEGER;
+ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS key_insight         TEXT;
+ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS ai_processed_at     TIMESTAMPTZ;
+ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS ai_provider         TEXT;
+ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS ai_model            TEXT;
+ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS ai_error            TEXT;
+CREATE INDEX IF NOT EXISTS idx_lead_rec_ai_processed ON lead_recordings(ai_processed_at);

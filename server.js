@@ -908,6 +908,8 @@ document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () =>
   catch (e) { console.error('[boot] tat worker start failed:', e.message); }
   try { require('./routes/whatsbot').startCampaignWorker(); }
   catch (e) { console.error('[boot] wb campaign worker start failed:', e.message); }
+  try { require('./utils/aiCallSummary').startWorker(); }
+  catch (e) { console.error('[boot] ai-summary worker start failed:', e.message); }
   // Hourly trim of WhatsApp activity log — drops rows older than 24h.
   // Keeps the table small + the Activity Log render snappy. First run
   // 5 min after boot, then every 60 min.
