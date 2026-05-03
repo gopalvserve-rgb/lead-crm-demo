@@ -90,6 +90,29 @@ if (demo.on) {
   setTimeout(async () => {
     try {
       const db = require('./db/pg');
+      // First, always backfill missing AI costs on existing recordings —
+      // this catches recordings that got inserted before the pg.js
+      // whitelist was updated for ai_cost_* columns. Cheap and idempotent.
+      try {
+        const r = await db.query(
+          `UPDATE lead_recordings
+              SET ai_input_tokens  = COALESCE(ai_input_tokens, GREATEST(duration_s, 1) * 32),
+                  ai_output_tokens = COALESCE(ai_output_tokens, 700),
+                  ai_cost_usd      = COALESCE(ai_cost_usd,
+                                         (GREATEST(duration_s,1)*32)/1000000.0 * 0.30
+                                       + 700/1000000.0 * 2.50),
+                  ai_cost_inr      = COALESCE(ai_cost_inr,
+                                         ((GREATEST(duration_s,1)*32)/1000000.0 * 0.30
+                                         + 700/1000000.0 * 2.50) * 84)
+            WHERE ai_provider IS NOT NULL
+              AND (ai_cost_inr IS NULL OR ai_cost_inr = 0)`
+        );
+        if (r.rowCount > 0) console.log('[demo-seed] backfilled AI costs on', r.rowCount, 'existing recordings');
+      } catch (e) {
+        if (!/column .* does not exist/i.test(e.message)) {
+          console.warn('[demo-seed] cost backfill skipped:', e.message);
+        }
+      }
       // Check ALL the new tables — if ANY are empty, run seed-demo so it
       // can backfill them. Each block inside seedDemo has its own
       // idempotency check, so re-running is safe.
