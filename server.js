@@ -89,12 +89,21 @@ if (demo.on) {
   setTimeout(async () => {
     try {
       const db = require('./db/pg');
-      const leads = await db.getAll('leads').catch(() => []);
-      if (leads.length > 5) {
-        console.log('[demo-seed] already seeded —', leads.length, 'leads — skipping');
+      // Check ALL the new tables — if ANY are empty, run seed-demo so it
+      // can backfill them. Each block inside seedDemo has its own
+      // idempotency check, so re-running is safe.
+      const [leads, customers, inventory, chatRooms] = await Promise.all([
+        db.getAll('leads').catch(() => []),
+        db.getAll('customers').catch(() => []),
+        db.getAll('inventory').catch(() => []),
+        db.getAll('chat_rooms').catch(() => [])
+      ]);
+      const fullySeeded = leads.length > 5 && customers.length > 2 && inventory.length > 2 && chatRooms.length > 0;
+      if (fullySeeded) {
+        console.log('[demo-seed] already fully seeded —', leads.length, 'leads,', customers.length, 'customers, skipping');
         return;
       }
-      console.log('[demo-seed] running seed-demo inline...');
+      console.log('[demo-seed] running seed-demo inline (leads:' + leads.length + ', customers:' + customers.length + ', inv:' + inventory.length + ', chat:' + chatRooms.length + ')...');
       const { seedDemo } = require('./db/seed-demo');
       await seedDemo();
       console.log('[demo-seed] complete ✓');
