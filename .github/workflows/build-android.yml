@@ -56,21 +56,39 @@ jobs:
         working-directory: cap-app
         run: npx cap sync android
 
-      - name: Decode signing keystore
+      - name: Provision signing keystore
         run: |
           mkdir -p cap-app/android/app
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > cap-app/android/app/release.keystore
+          KS=cap-app/android/app/release.keystore
+          # If the user has supplied a keystore via secrets, decode it.
+          # Otherwise auto-generate a fresh keystore — fine for a demo APK
+          # since prospects sideload, not install via Play Store.
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "Using ANDROID_KEYSTORE_BASE64 from secrets"
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "$KS"
+            echo "STORE_PASS=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+            echo "KEY_PASS=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
+          else
+            echo "No signing secret found — auto-generating a fresh keystore"
+            keytool -genkeypair -v \
+              -keystore "$KS" \
+              -storetype JKS \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass smartcrm-demo \
+              -keypass smartcrm-demo \
+              -alias android \
+              -dname "CN=SmartCRM Demo, OU=Demo, O=SmartCRM, L=Mumbai, ST=MH, C=IN"
+            echo "STORE_PASS=smartcrm-demo" >> $GITHUB_ENV
+            echo "KEY_PASS=smartcrm-demo" >> $GITHUB_ENV
+          fi
 
       - name: Configure release-signing.properties
         run: |
-          # The committed build.gradle reads signing config from this file.
-          # Overwrite it with the CI-decoded keystore + secret passwords so
-          # the local sandbox path that's checked in does not leak into CI.
           cat > cap-app/android/app/release-signing.properties <<EOF
           storeFile=release.keystore
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          storePassword=${STORE_PASS}
           keyAlias=android
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyPassword=${KEY_PASS}
           EOF
 
       - name: Gradle assembleRelease (signed)
