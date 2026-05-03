@@ -765,9 +765,9 @@ VIEWS.dashboard = async (view) => {
   // at a glance from the dashboard without having to filter the leads list.
   view.append(
     h('div', { class: 'cards' },
-      card('Total Leads',  summary.totals.total,      'accent', '🎯'),
+      card('Total Leads',  summary.totals.total,      'accent', '🎯', '#/leads'),
       card('New today',    due.counts.new_today || 0, 'accent', '✨', '#/leads?filter=new_today'),
-      card('Won',          summary.totals.won,        'ok',     '🏆'),
+      card('Won',          summary.totals.won,        'ok',     '🏆', '#/leads?filter=won'),
       card('Due today',    due.counts.due_today,      'warn',   '📅', '#/followups?tab=due'),
       card('Overdue',      due.counts.overdue,        'err',    '⚠️', '#/followups?tab=overdue')
     )
@@ -12302,16 +12302,26 @@ async function syncRecordings(opts) {
       skippedNoMatch++;
       continue;
     }
-    const lead = digits ? (CRM.cache.lastLeads || []).find(l =>
-      String(l.phone || '').replace(/\D/g, '').endsWith(digits.slice(-10))
-    ) : null;
+    // Match the recording's phone number against every lead's
+    // phone/whatsapp/alt_phone — last 10 digits comparison so country-code
+    // variations (+91, 91, none) don't break the join.
+    const tail10 = digits.slice(-10);
+    const lead = digits ? (CRM.cache.lastLeads || []).find(l => {
+      for (const fld of ['phone', 'whatsapp', 'alt_phone']) {
+        const d = String(l[fld] || '').replace(/\D/g, '');
+        if (d && d.endsWith(tail10)) return true;
+      }
+      return false;
+    }) : null;
     const leadId = lead ? String(lead.id) : '';
 
-    // Stricter filter: only upload if there was a CRM-logged call event
-    // for this phone in the last 30 minutes. Stops the sync from grabbing
-    // recordings of personal calls to customers (calls outside the CRM
-    // context). Skipped silently if includeUnmatched is on.
-    if (!includeUnmatched && digits) {
+    // If the filename's phone number maps to a lead, that's all the
+    // evidence we need — the recording belongs to that lead, period.
+    // Earlier we also required a recent call_event from the CRM, which
+    // dropped recordings for any call made directly from the phone
+    // (without auto-dial / dial-from-CRM). For real-world reps this
+    // hid 80%+ of recordings. Now: lead-match wins.
+    if (!includeUnmatched && !lead && digits) {
       try {
         const hr = await api('api_call_hasRecentEvent', meta.phone, 30);
         if (!hr || !hr.matched) {
