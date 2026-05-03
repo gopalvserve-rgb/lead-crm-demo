@@ -664,6 +664,10 @@ async function seedDemo() {
         const sId = sIdByName[String(tpl.suggested_status).toLowerCase()] || null;
 
         try {
+          // Note: audio_bytes is omitted entirely (BYTEA accepts null but
+          // some drivers prefer the field absent). The audio player on the
+          // recording row will 404 on /api/recordings/:id/audio in the demo
+          // — that's fine, the AI summary card is the demo target.
           await db.insert('lead_recordings', {
             lead_id: lead.id,
             user_id: repId,
@@ -672,8 +676,6 @@ async function seedDemo() {
             duration_s: dur,
             mime_type: 'audio/mp3',
             size_bytes: dur * 14000,                    // ~14 KB/sec for compressed mp3
-            // No actual audio_bytes — demo skips audio playback
-            audio_bytes: null,
             started_at: isoTs(createdDay),
             created_at: isoTs(createdDay),
             // AI summary fields — pre-populated so the UI shows everything
