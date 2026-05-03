@@ -44,6 +44,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          # Don't try to cache npm — there's no top-level package-lock.json
+          # at the repo root (only inside cap-app/) and setup-node fails
+          # when the lockfile pattern resolves to nothing.
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3

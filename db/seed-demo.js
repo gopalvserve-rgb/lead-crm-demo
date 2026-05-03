@@ -386,6 +386,170 @@ async function seedDemo() {
       console.log(`✓ Salary slips for last 3 months`);
     }
 
+    // ---- 10b. Customers (converted from won leads) ----
+    const customersCount = (await db.getAll('customers').catch(() => [])).length;
+    if (customersCount < 3) {
+      const wonStatusId = statusIds['Booked'] || statusIds['Won'];
+      const wonLeads = (await db.getAll('leads').catch(() => [])).filter(l => Number(l.status_id) === Number(wonStatusId)).slice(0, 8);
+      for (let i = 0; i < Math.max(wonLeads.length, 8); i++) {
+        const l = wonLeads[i] || {};
+        const name = l.name || fullName();
+        const phone = l.phone || phoneIN();
+        const cityRow = pick(CITIES);
+        const prop = pick(PROPERTIES);
+        const customerSince = isoDay(daysAgo(rand(30, 180)));
+        const customerStatus = pick(['active','active','active','active','lapsed']);
+        const ltv = prop.price * (rand(1, 3));
+        try {
+          const cIns = await db.insert('customers', {
+            from_lead_id: l.id || null,
+            name,
+            phone,
+            email: l.email || emailFor(name),
+            address: cityRow[0] + ', India',
+            city: cityRow[0], state: cityRow[1], pincode: cityRow[2], country: 'India',
+            customer_since: customerSince,
+            status: customerStatus,
+            tags: pick(['premium', 'repeat', 'investor', 'referrer']),
+            notes: `Purchased ${prop.name}. ${customerStatus === 'lapsed' ? 'Renewal pending.' : 'Active customer.'}`,
+            assigned_to: pick(repIds),
+            lifetime_value: ltv,
+            total_purchases: rand(1, 4),
+            last_purchase_at: isoTs(daysAgo(rand(7, 90))),
+            created_by: admin.id
+          });
+          // Add a sale record
+          await db.insert('customer_sales', {
+            customer_id: cIns.id,
+            product_name: prop.name,
+            amount: prop.price,
+            sale_date: customerSince,
+            payment_status: pick(['paid', 'paid', 'paid', 'partial']),
+            notes: 'Token + booking complete.',
+            created_by: pick(repIds)
+          }).catch(() => {});
+          // Add 1-2 customer remarks
+          await db.insert('customer_remarks', {
+            customer_id: cIns.id,
+            user_id: pick(repIds),
+            text: pick(['Quarterly check-in done. Customer happy.', 'Discussed possible upsell.', 'Sent festive greetings.', 'Onboarded family members.']),
+            remark_type: pick(['call', 'whatsapp', 'meeting', 'note'])
+          }).catch(() => {});
+        } catch (e) { /* schema diff tolerated */ }
+      }
+      console.log(`✓ Customers + sales + remarks`);
+    }
+
+    // ---- 10c. Inventory ----
+    const inventoryCount = (await db.getAll('inventory').catch(() => [])).length;
+    if (inventoryCount < 5) {
+      const inventoryItems = [
+        { name: 'Celeste Skyview Towers — A1', units_total: 100, units_sold: 67, units_blocked: 5, location: 'Mumbai, MH' },
+        { name: 'Celeste Skyview Towers — A2', units_total: 80,  units_sold: 42, units_blocked: 3, location: 'Mumbai, MH' },
+        { name: 'Lakeview Villas (Phase 1)',   units_total: 24,  units_sold: 14, units_blocked: 2, location: 'Pune, MH' },
+        { name: 'Greenfield Plots (Sector 5)', units_total: 50,  units_sold: 31, units_blocked: 4, location: 'Bengaluru, KA' },
+        { name: 'Riverside Residency (B Wing)',units_total: 60,  units_sold: 22, units_blocked: 1, location: 'Hyderabad, TS' },
+        { name: 'Hillview Penthouse',          units_total: 8,   units_sold: 3,  units_blocked: 0, location: 'Delhi, DL' },
+        { name: 'Office Spaces — Floor 7',     units_total: 12,  units_sold: 9,  units_blocked: 0, location: 'Mumbai BKC' }
+      ];
+      for (const inv of inventoryItems) {
+        await db.insert('inventory', Object.assign(inv, {
+          units_available: inv.units_total - inv.units_sold - inv.units_blocked,
+          notes: 'Demo inventory tracker.',
+          created_by: admin.id
+        })).catch(() => {});
+      }
+      console.log(`✓ Inventory (${inventoryItems.length} projects)`);
+    }
+
+    // ---- 10d. Team chat (1 group + 1 DM with messages) ----
+    const chatRoomsCount = (await db.getAll('chat_rooms').catch(() => [])).length;
+    if (chatRoomsCount < 2) {
+      try {
+        // Group room
+        const groupRoom = await db.insert('chat_rooms', {
+          type: 'group',
+          name: 'Sales Team 🚀',
+          created_by: admin.id
+        });
+        const allUserIds = [admin.id, ...repIds];
+        for (const uid of allUserIds) {
+          await db.insert('chat_room_members', { room_id: groupRoom.id, user_id: uid }).catch(() => {});
+        }
+        const groupMsgs = [
+          [admin.id, 'Good morning team! Big push today on the Skyview launch.'],
+          [repIds[0], 'On it! 3 site visits scheduled for today.'],
+          [repIds[1], 'Just closed Mr. Sharma\'s 3BHK booking 🎉'],
+          [admin.id, 'Brilliant @Rahul! Bonus on the way 💰'],
+          [repIds[2], 'Need help with Lakeview brochure — anyone has the latest?'],
+          [repIds[3], 'I have it — sending now.'],
+          [admin.id, 'EOD report at 7pm in the channel please.']
+        ];
+        for (let i = 0; i < groupMsgs.length; i++) {
+          await db.insert('chat_messages', {
+            room_id: groupRoom.id,
+            user_id: groupMsgs[i][0],
+            text: groupMsgs[i][1],
+            created_at: isoTs(new Date(Date.now() - (groupMsgs.length - i) * 600000))
+          }).catch(() => {});
+        }
+
+        // DM room (admin ↔ Priya)
+        const dmRoom = await db.insert('chat_rooms', {
+          type: 'dm',
+          name: '',
+          created_by: admin.id
+        }).catch(() => null);
+        if (dmRoom) {
+          await db.insert('chat_room_members', { room_id: dmRoom.id, user_id: admin.id }).catch(() => {});
+          await db.insert('chat_room_members', { room_id: dmRoom.id, user_id: repIds[0] }).catch(() => {});
+          const dmMsgs = [
+            [admin.id, 'Hi Priya, how\'s the Skyview pitch going?'],
+            [repIds[0], 'Good — I think we close 2 more this week.'],
+            [admin.id, '🎯 Keep me posted.']
+          ];
+          for (let i = 0; i < dmMsgs.length; i++) {
+            await db.insert('chat_messages', {
+              room_id: dmRoom.id,
+              user_id: dmMsgs[i][0],
+              text: dmMsgs[i][1],
+              created_at: isoTs(new Date(Date.now() - (dmMsgs.length - i) * 1200000))
+            }).catch(() => {});
+          }
+        }
+        console.log(`✓ Team chat (group + DM)`);
+      } catch (e) { console.warn('  (chat seed skipped:', e.message, ')'); }
+    }
+
+    // ---- 10e. TAT thresholds + violations ----
+    const tatCount = (await db.getAll('tat_thresholds').catch(() => [])).length;
+    if (tatCount === 0) {
+      try {
+        const newId = statusIds['New'];
+        const contactedId = statusIds['Contacted'];
+        const visitId = statusIds['Site Visit Scheduled'];
+        if (newId) await db.insert('tat_thresholds', { from_status_id: newId, hours: 2, label: 'New → Contact within 2h' }).catch(() => {});
+        if (contactedId) await db.insert('tat_thresholds', { from_status_id: contactedId, hours: 24, label: 'Contacted → Schedule visit within 24h' }).catch(() => {});
+        if (visitId) await db.insert('tat_thresholds', { from_status_id: visitId, hours: 72, label: 'Visit → Decision within 72h' }).catch(() => {});
+
+        // Create some TAT violations on a few leads (the ones still in early stages)
+        const leadsForViolations = (await db.getAll('leads').catch(() => [])).slice(0, 12);
+        for (const l of leadsForViolations) {
+          if (Math.random() < 0.4) {
+            await db.insert('tat_violations', {
+              lead_id: l.id,
+              user_id: l.assigned_to || pick(repIds),
+              status_id: l.status_id,
+              threshold_hours: pick([2, 24, 72]),
+              actual_hours: rand(8, 96),
+              created_at: isoTs(daysAgo(rand(1, 5)))
+            }).catch(() => {});
+          }
+        }
+        console.log(`✓ TAT thresholds + violations`);
+      } catch (e) { /* schema diff tolerated */ }
+    }
+
     // ---- 11. Brand config ----
     await db.upsertConfig?.('COMPANY_NAME', 'SmartCRM Demo').catch(() => {});
     await db.query?.(
