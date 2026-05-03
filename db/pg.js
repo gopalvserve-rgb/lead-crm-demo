@@ -355,6 +355,30 @@ const SCHEMA = {
     columns: ['user_id', 'name', 'view', 'filter_json', 'is_shared', 'created_at'],
     json: ['filter_json']
   },
+  customers: {
+    columns: [
+      'from_lead_id', 'name', 'phone', 'alt_phone', 'whatsapp', 'email', 'pan',
+      'date_of_birth', 'gender', 'occupation', 'income_range', 'risk_profile',
+      'address', 'city', 'state', 'pincode', 'country', 'company',
+      'customer_since', 'status', 'tags', 'notes', 'assigned_to',
+      'lifetime_value', 'total_purchases', 'last_purchase_at', 'next_renewal_at',
+      'extra_json', 'created_by', 'created_at', 'updated_at'
+    ],
+    json: ['extra_json']
+  },
+  customer_sales: {
+    columns: [
+      'customer_id', 'product_id', 'product_name', 'sale_type', 'sold_at',
+      'sold_by', 'amount', 'currency', 'payment_status', 'payment_method',
+      'payment_reference', 'subscription_start', 'subscription_end', 'status',
+      'notes', 'invoice_url', 'created_at'
+    ],
+    json: []
+  },
+  customer_remarks: {
+    columns: ['customer_id', 'user_id', 'remark', 'remark_type', 'created_at'],
+    json: []
+  },
   monthly_targets: {
     columns: [
       'user_id', 'month', 'target_revenue', 'target_leads',
