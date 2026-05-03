@@ -1,0 +1,35 @@
+{
+  "appId": "com.smartcrm.demo",
+  "appName": "SmartCRM Demo",
+  "webDir": "www",
+  "server": {
+    "url": "https://demo.smartcrmsolution.com",
+    "cleartext": false,
+    "androidScheme": "https",
+    "iosScheme": "https",
+    "allowNavigation": [
+      "demo.smartcrmsolution.com",
+      "tel:*",
+      "mailto:*",
+      "whatsapp:*"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0E1A14",
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "CallerId": {
+      "enabled": true
+    }
+  },
+  "ios": {
+    "backgroundColor": "#0F172A",
+    "contentInset": "always",
+    "limitsNavigationsToAppBoundDomains": false,
+    "scrollEnabled": true,
+    "preferredContentMode": "mobile",
+    "scheme": "App"
+  }
+}

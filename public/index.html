@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#6366f1" />
+  <title>SmartCRM Demo — Try it free</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <!-- Shepherd.js for guided tutorial -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/shepherd.js@11.2.0/dist/css/shepherd.css" />
+  <script src="https://cdn.jsdelivr.net/npm/shepherd.js@11.2.0/dist/js/shepherd.min.js"></script>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><text y=%2224%22 font-size=%2226%22>🎯</text></svg>" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+    }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- Demo banner shown on every page -->
+  <div id="demo-banner" class="demo-banner">
+    🎭 <strong>Demo mode</strong> — outbound emails, WhatsApp, Facebook & push are simulated. Data resets when admin reseeds.
+    <button id="demo-banner-close" title="Hide">×</button>
+  </div>
+
+  <!-- Login screen -->
+  <template id="tpl-login">
+    <div class="login-screen">
+      <div class="login-card">
+        <div class="login-brand">
+          <img class="login-logo" data-bind="logo_url" alt="" />
+          <h1 data-bind="company_name">SmartCRM Demo</h1>
+        </div>
+        <div class="demo-creds">
+          <div class="demo-creds-title">Try it instantly:</div>
+          <div class="demo-creds-row"><span>📧 Email</span><code>demo@smartcrmsolution.com</code></div>
+          <div class="demo-creds-row"><span>🔑 Password</span><code>demo123</code></div>
+          <button type="button" class="btn ghost block" id="demo-autofill">Auto-fill &amp; sign in</button>
+        </div>
+        <form id="login-form">
+          <label>Email</label>
+          <input type="email" name="email" autocomplete="username" required />
+          <label>Password</label>
+          <input type="password" name="password" autocomplete="current-password" required />
+          <button type="submit" class="btn primary block">Sign in</button>
+          <p id="login-err" class="error"></p>
+        </form>
+      </div>
+    </div>
+  </template>
+
+  <!-- Shell: top bar + sidebar + content -->
+  <template id="tpl-shell">
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <img data-bind="logo_url" class="sidebar-logo" alt="" />
+          <span data-bind="company_name">Lead CRM</span>
+        </div>
+        <nav id="nav"></nav>
+        <div class="sidebar-footer">
+          <div class="me">
+            <span class="avatar" data-bind="initials"></span>
+            <div>
+              <div class="name" data-bind="user_name"></div>
+              <div class="role" data-bind="user_role"></div>
+            </div>
+          </div>
+          <button class="btn ghost block" id="btn-logout">Logout</button>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="topbar">
+          <h2 id="page-title">Dashboard</h2>
+          <div class="topbar-right">
+            <button class="btn ghost" id="btn-getapp" title="Install / Download the app">
+              <span>📱</span>
+              <span class="topbar-getapp-text">Get app</span>
+            </button>
+            <button class="btn ghost" id="btn-notif">
+              <span>🔔</span><span class="badge" id="notif-count" hidden>0</span>
+            </button>
+          </div>
+        </header>
+        <section id="view"></section>
+      </main>
+    </div>
+  </template>
+
+  <script src="/app.js" defer></script>
+  <!-- Caller-ID native bridge — no-op in browser, active inside Capacitor wrapper. -->
+  <script src="/caller-id-native.js" defer></script>
+  <!-- Demo guided tutorial -->
+  <script src="/tutorial.js" defer></script>
+  <!-- Demo banner & login auto-fill helpers -->
+  <script>
+    (function () {
+      var b = document.getElementById('demo-banner');
+      var c = document.getElementById('demo-banner-close');
+      if (c) c.onclick = function () { if (b) b.style.display = 'none'; };
+      document.addEventListener('click', function (e) {
+        if (e.target && e.target.id === 'demo-autofill') {
+          var f = document.getElementById('login-form');
+          if (!f) return;
+          f.email.value = 'demo@smartcrmsolution.com';
+          f.password.value = 'demo123';
+          f.querySelector('button[type="submit"]').click();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
