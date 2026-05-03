@@ -103,7 +103,7 @@ const isoTs    = d => d.toISOString();
 
 // ------------------------------------------------------------------ seed
 
-(async () => {
+async function seedDemo() {
   try {
     console.log('🎭 Seeding SmartCRM Demo data...\n');
 
@@ -409,9 +409,15 @@ const isoTs    = d => d.toISOString();
 `);
   } catch (e) {
     console.error('✗ Seed failed:', e);
-    process.exitCode = 1;
-  } finally {
-    db.pool.end().catch(() => {});
-    setImmediate(() => process.exit(process.exitCode || 0));
+    throw e;
   }
-})();
+}
+
+// Allow both CLI use (`node db/seed-demo.js`) and module use (`require(...)`)
+if (require.main === module) {
+  seedDemo()
+    .then(() => { db.pool.end().catch(() => {}); setImmediate(() => process.exit(0)); })
+    .catch(() => { db.pool.end().catch(() => {}); setImmediate(() => process.exit(1)); });
+}
+
+module.exports = { seedDemo };
