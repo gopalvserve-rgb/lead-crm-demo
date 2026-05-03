@@ -11,7 +11,7 @@ android {
         // CI bumps versionCode to GITHUB_RUN_NUMBER on every build so a
         // re-installed APK never has the same code as the previous one
         // (Android silently skips installs that match the existing code).
-        versionCode (System.getenv("GITHUB_RUN_NUMBER") ?: "1") as Integer
+        versionCode Integer.parseInt(System.getenv("GITHUB_RUN_NUMBER") ?: "1")
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
