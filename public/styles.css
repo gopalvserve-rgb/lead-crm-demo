@@ -2293,3 +2293,12 @@ code { background: var(--bg-alt); padding: 1px 6px; border-radius: 3px; font-siz
 .call-rating-report th { text-align: left; background: #f3f4f6; padding: 8px 10px; font-weight: 600; }
 .call-rating-report td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
 .call-rating-report .num-pill { display: inline-block; min-width: 24px; padding: 2px 6px; text-align: center; background: #eef2ff; color: #4338ca; border-radius: 4px; font-weight: 500; font-size: 12px; }
+
+/* ===== AI Usage cards ===== */
+.card.kpi { padding: 14px; }
+.card.kpi .kpi-label { font-size: 12px; color: #64748b; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+.card.kpi .kpi-value { font-size: 22px; font-weight: 700; margin-top: 4px; color: #1e293b; }
+.card.kpi .kpi-sub   { font-size: 12px; margin-top: 4px; }
+.card.kpi.ok    .kpi-value { color: #10b981; }
+.card.kpi.warn  .kpi-value { color: #f59e0b; }
+.card.kpi.accent .kpi-value { color: #6366f1; }

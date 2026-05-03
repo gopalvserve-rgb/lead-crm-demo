@@ -1013,3 +1013,12 @@ ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS rated_at            TIMESTA
 ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS ai_suggested_rating INTEGER;
 CREATE INDEX IF NOT EXISTS idx_lead_rec_rating ON lead_recordings(rating);
 CREATE INDEX IF NOT EXISTS idx_lead_rec_rating_by ON lead_recordings(rating_by);
+
+-- ===========================================================
+-- v17: AI usage + cost tracking per recording
+-- ===========================================================
+ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS ai_input_tokens   INTEGER;
+ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS ai_output_tokens  INTEGER;
+ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS ai_cost_usd       NUMERIC(10,6);
+ALTER TABLE lead_recordings ADD COLUMN IF NOT EXISTS ai_cost_inr       NUMERIC(10,4);
+CREATE INDEX IF NOT EXISTS idx_lead_rec_ai_cost ON lead_recordings(ai_cost_usd);
