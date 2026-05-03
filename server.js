@@ -93,13 +93,14 @@ if (demo.on) {
       // Check ALL the new tables — if ANY are empty, run seed-demo so it
       // can backfill them. Each block inside seedDemo has its own
       // idempotency check, so re-running is safe.
-      const [leads, customers, inventory, chatRooms] = await Promise.all([
+      const [leads, customers, inventory, chatRooms, recordings] = await Promise.all([
         db.getAll('leads').catch(() => []),
         db.getAll('customers').catch(() => []),
         db.getAll('inventory').catch(() => []),
-        db.getAll('chat_rooms').catch(() => [])
+        db.getAll('chat_rooms').catch(() => []),
+        db.getAll('lead_recordings').catch(() => [])
       ]);
-      const fullySeeded = leads.length > 5 && customers.length > 2 && inventory.length > 2 && chatRooms.length > 0;
+      const fullySeeded = leads.length > 5 && customers.length > 2 && inventory.length > 2 && chatRooms.length > 0 && recordings.length > 5;
       if (fullySeeded) {
         console.log('[demo-seed] already fully seeded —', leads.length, 'leads,', customers.length, 'customers, skipping');
         return;

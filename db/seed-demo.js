@@ -550,6 +550,165 @@ async function seedDemo() {
       } catch (e) { /* schema diff tolerated */ }
     }
 
+    // ---- 10f. Call recordings with AI summaries (the showpiece data) ----
+    // Demo prospects need to SEE the AI feature working without uploading
+    // real audio. We seed ~35 recordings across leads/reps/sentiments,
+    // each with a full transcript, summary, action items, suggested
+    // status, manual rating, AI-suggested rating, plus token counts and
+    // realistic vendor cost so the AI Usage view shows believable numbers.
+    const recCount = (await db.getAll('lead_recordings').catch(() => [])).length;
+    if (recCount < 5) {
+      const allLeads = await db.getAll('leads').catch(() => []);
+      const statuses = await db.getAll('statuses').catch(() => []);
+      const sIdByName = Object.fromEntries(statuses.map(s => [String(s.name).toLowerCase(), s.id]));
+
+      // 8 conversation templates spanning sentiment + outcome.
+      const TEMPLATES = [
+        {
+          summary: 'Rep introduced 3BHK Skyview Tower at ₹1.25Cr. Customer keen, asked about parking + amenities. Site visit booked for Saturday 11 AM.',
+          transcript: 'Rep: Good morning sir, this is Priya from Celeste Abode about Skyview Towers.\nCustomer: Hello Priya, yes I had filled the form online.\nRep: I have 3BHK in B-wing, ₹1.25 crore inclusive of one parking. Floor 12 east-facing.\nCustomer: That sounds good. What about amenities?\nRep: Full clubhouse, pool, gym, kids play area, 24×7 security.\nCustomer: Can I visit this Saturday?\nRep: Saturday 11 AM works. I will share location pin on WhatsApp.\nCustomer: Perfect. Thank you.\nRep: Thank you sir.',
+          action_items: ['Send Skyview brochure on WhatsApp', 'Send Saturday 11 AM location pin', 'Block 3BHK B-12 inventory tentatively'],
+          sentiment: 'positive', suggested_status: 'Site Visit Scheduled', next_followup_in_days: 5,
+          key_insight: 'Customer self-suggested the visit time — strong intent. Rep should arrange refreshments + token form ready.',
+          rating: 5, ai_rating: 5
+        },
+        {
+          summary: 'First call to fresh inquiry. Customer was busy in a meeting, agreed to a callback tomorrow at 4 PM. Brief introduction given.',
+          transcript: 'Rep: Hi sir, this is Rahul from Celeste Abode...\nCustomer: I am in a meeting, can you call later?\nRep: Sure, what time works for you?\nCustomer: 4 PM tomorrow.\nRep: Booked. I will call at 4 PM tomorrow.',
+          action_items: ['Call back tomorrow 4 PM', 'Save phone-number with name on contacts'],
+          sentiment: 'neutral', suggested_status: 'Contacted', next_followup_in_days: 1,
+          key_insight: 'Mid-day calls during business hours frequently get rejected. Try evening 6-8 PM slot for cold outreach.',
+          rating: 3, ai_rating: 3
+        },
+        {
+          summary: 'Customer compared Lakeview Villas with Hiranandani. Concerned about price (₹3.25Cr vs Hiranandani ₹2.9Cr). Requested 5% discount.',
+          transcript: 'Customer: Lakeview is ₹3.25Cr but Hiranandani is offering similar at ₹2.9Cr.\nRep: Sir Lakeview is sea-facing, bigger built-up, premium amenities. Different value proposition.\nCustomer: Can you do 5% discount?\nRep: Let me check with management and get back tomorrow.\nCustomer: OK but I am also seeing Lodha next week.',
+          action_items: ['Escalate 5% discount request to manager', 'Send comparison sheet vs Hiranandani', 'Beat Lodha visit by Saturday'],
+          sentiment: 'neutral', suggested_status: 'Negotiating', next_followup_in_days: 1,
+          key_insight: 'Customer is actively shopping multiple builders. Price-sensitive — bundle parking + GST waiver might close the deal without 5% discount.',
+          rating: 4, ai_rating: 4
+        },
+        {
+          summary: '3BHK booking confirmed! Customer paid ₹2L token via UPI. Documentation visit on Wednesday. Couple very happy.',
+          transcript: 'Customer: Send the bank details, I will pay token now.\nRep: Sending account details on WhatsApp. ₹2 lakhs token.\nCustomer: Done, transferred. Got reference.\nRep: Confirmed, congratulations sir! Documentation on Wednesday at office.\nCustomer: Thank you Priya, this was so smooth.',
+          action_items: ['Schedule documentation Wed 11 AM', 'Send welcome kit', 'Loop in legal team for sale agreement', 'Convert to Customer record'],
+          sentiment: 'positive', suggested_status: 'Booked', next_followup_in_days: 2,
+          key_insight: 'Customer praised process simplicity — request a Google review at Wednesday meeting.',
+          rating: 5, ai_rating: 5
+        },
+        {
+          summary: 'Customer not interested. Already booked elsewhere with Lodha last week. Polite decline. Asked to be removed from outreach.',
+          transcript: 'Customer: I have already booked with Lodha last week.\nRep: Oh I see, congratulations sir. Can I keep you in touch for future investment options?\nCustomer: No please, do not call again.',
+          action_items: ['Mark lead as Lost — competitor (Lodha)', 'Add to do-not-call list'],
+          sentiment: 'negative', suggested_status: 'Lost', next_followup_in_days: 30,
+          key_insight: 'Lodha closed in our funnel timeframe. Investigate why our 1st-call delay let them in.',
+          rating: 2, ai_rating: 2
+        },
+        {
+          summary: 'Customer\'s wife wants to see the property too. Rescheduled visit from Saturday to next Sunday so both can come together.',
+          transcript: 'Customer: My wife also wants to see, can we do Sunday instead?\nRep: Of course sir, Sunday 11 AM same time.\nCustomer: Yes that works.\nRep: I will send you a reminder Saturday evening.',
+          action_items: ['Reschedule visit to Sunday 11 AM', 'Send reminder Saturday evening', 'Prepare BOTH partners-friendly tour: family room first'],
+          sentiment: 'positive', suggested_status: 'Site Visit Scheduled', next_followup_in_days: 7,
+          key_insight: 'Spouse has equal/final say — schedule the tour around her interests (kitchen + kids amenities).',
+          rating: 4, ai_rating: 4
+        },
+        {
+          summary: 'Customer concerned about loan eligibility. Rep introduced HDFC tie-up. Checking eligibility, callback Friday.',
+          transcript: 'Customer: I am worried about loan, salary is ₹85k, will I get ₹80L loan?\nRep: We have tie-up with HDFC, you can get up to 80% LTV with that salary easily. Let me get the eligibility checked. Please share PAN.\nCustomer: Sending now on WhatsApp.\nRep: I will get back Friday with the eligibility letter.',
+          action_items: ['Share PAN + last 6 months salary slips with HDFC', 'Get eligibility letter by Thursday', 'Call Friday 11 AM with result'],
+          sentiment: 'positive', suggested_status: 'Negotiating', next_followup_in_days: 4,
+          key_insight: 'Loan-anxiety is the #1 drop-off point. Lead with HDFC partnership in initial pitch to disarm.',
+          rating: 4, ai_rating: 4
+        },
+        {
+          summary: 'Customer wants to negotiate registration cost. Asked rep to absorb stamp duty (~₹3L). Rep declined politely, will check waiver options.',
+          transcript: 'Customer: Stamp duty is 6% — that is ₹3 lakhs extra. Can you absorb it?\nRep: Sir we cannot absorb stamp duty, but we can offer free club membership for 2 years (~₹1.2L value).\nCustomer: I want both — free membership + 50% stamp duty.\nRep: Let me check with management. I will revert tomorrow.',
+          action_items: ['Ask manager: 50% stamp duty waiver feasibility', 'Quote: club membership + ₹1L registration support package', 'Schedule callback tomorrow 5 PM'],
+          sentiment: 'neutral', suggested_status: 'Negotiating', next_followup_in_days: 1,
+          key_insight: 'Customer is anchoring high — counter with 50% of his ask + premium amenity. Standard negotiation playbook.',
+          rating: 3, ai_rating: 3
+        }
+      ];
+
+      // Pricing constants for cost computation (must mirror utils/aiCallSummary.js)
+      const GEMINI_INPUT_USD_PER_M  = 0.30;
+      const GEMINI_OUTPUT_USD_PER_M = 2.50;
+      const USD_TO_INR              = 84;
+      const AUDIO_TOKENS_PER_SEC    = 32;
+      function _cost(durSec, outTokens) {
+        const audioTokens = durSec * AUDIO_TOKENS_PER_SEC;
+        const usd = audioTokens / 1_000_000 * GEMINI_INPUT_USD_PER_M
+                  + outTokens   / 1_000_000 * GEMINI_OUTPUT_USD_PER_M;
+        return {
+          input_tokens: audioTokens,
+          output_tokens: outTokens,
+          cost_usd: Number(usd.toFixed(6)),
+          cost_inr: Number((usd * USD_TO_INR).toFixed(4))
+        };
+      }
+
+      // Spread 35 recordings over 30 days, mostly on the most-recent leads
+      const NUM_RECORDINGS = 35;
+      const recentLeads = allLeads.slice(0, 60);
+      let inserted = 0;
+      for (let i = 0; i < NUM_RECORDINGS && i < recentLeads.length; i++) {
+        const lead = recentLeads[i];
+        const tpl = TEMPLATES[i % TEMPLATES.length];
+        const dur = rand(45, 480);                      // 45s to 8 min
+        const repId = pick(repIds);
+        const createdDay = daysAgo(rand(0, 28));
+        // 700 output tokens average per call summary
+        const cost = _cost(dur, rand(550, 850));
+
+        // Map suggested_status text → real status_id from this DB
+        const sId = sIdByName[String(tpl.suggested_status).toLowerCase()] || null;
+
+        try {
+          await db.insert('lead_recordings', {
+            lead_id: lead.id,
+            user_id: repId,
+            phone: lead.phone,
+            direction: pick(['out', 'out', 'out', 'in']), // mostly outbound
+            duration_s: dur,
+            mime_type: 'audio/mp3',
+            size_bytes: dur * 14000,                    // ~14 KB/sec for compressed mp3
+            // No actual audio_bytes — demo skips audio playback
+            audio_bytes: null,
+            started_at: isoTs(createdDay),
+            created_at: isoTs(createdDay),
+            // AI summary fields — pre-populated so the UI shows everything
+            transcript: tpl.transcript,
+            summary: tpl.summary,
+            action_items: JSON.stringify(tpl.action_items),
+            sentiment: tpl.sentiment,
+            suggested_status_id: sId,
+            next_followup_days: tpl.next_followup_in_days,
+            key_insight: tpl.key_insight,
+            ai_processed_at: isoTs(new Date(createdDay.getTime() + 60_000)),
+            ai_provider: 'gemini',
+            ai_model: 'gemini-2.5-flash',
+            ai_error: null,
+            // Manual rating on ~70% of recordings, the rest unrated
+            rating: Math.random() < 0.7 ? tpl.rating : null,
+            rating_by: Math.random() < 0.7 ? admin.id : null,
+            rated_at: Math.random() < 0.7 ? isoTs(new Date(createdDay.getTime() + 5 * 60_000)) : null,
+            ai_suggested_rating: tpl.ai_rating,
+            // Cost tracking — feeds the AI Usage report
+            ai_input_tokens:  cost.input_tokens,
+            ai_output_tokens: cost.output_tokens,
+            ai_cost_usd:      cost.cost_usd,
+            ai_cost_inr:      cost.cost_inr
+          });
+          inserted++;
+        } catch (e) {
+          // Schema column missing — older deploy. Skip silently.
+          if (i === 0) console.warn('[demo-seed] recordings skipped:', e.message);
+          break;
+        }
+      }
+      console.log(`✓ ${inserted} call recordings with AI summaries`);
+    }
+
     // ---- 11. Brand config ----
     await db.upsertConfig?.('COMPANY_NAME', 'SmartCRM Demo').catch(() => {});
     await db.query?.(
