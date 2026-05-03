@@ -885,3 +885,98 @@ CREATE INDEX IF NOT EXISTS idx_sheet_int_token ON sheet_integrations(webhook_tok
 -- pull required). The legacy NOT NULL constraint blocked admins from
 -- switching an existing integration over to push mode.
 ALTER TABLE sheet_integrations ALTER COLUMN sheet_id DROP NOT NULL;
+
+-- ===========================================================
+-- Customers — post-sale lifecycle (Stockbox-specific, but the
+-- tables are tenant-neutral so Celeste can opt in later).
+-- ===========================================================
+-- Why a separate `customers` table instead of flagging leads:
+--   1. A customer can buy multiple products over time — leads are
+--      single-funnel objects, customers compound.
+--   2. Customer status (active/lapsed/churned) is independent of the
+--      original lead's funnel status. Once a deal is won, the lead
+--      stays in "Won" forever; the customer can churn next year.
+--   3. KYC + risk-profile + lifetime-value live here, not on the lead.
+CREATE TABLE IF NOT EXISTS customers (
+  id                SERIAL PRIMARY KEY,
+  from_lead_id      INTEGER REFERENCES leads(id) ON DELETE SET NULL,
+  name              TEXT NOT NULL,
+  phone             TEXT,
+  alt_phone         TEXT,
+  whatsapp          TEXT,
+  email             TEXT,
+  pan               TEXT,
+  date_of_birth     DATE,
+  gender            TEXT,
+  occupation        TEXT,
+  income_range      TEXT,
+  risk_profile      TEXT,                              -- low|medium|high (Stockbox)
+  address           TEXT,
+  city              TEXT,
+  state             TEXT,
+  pincode           TEXT,
+  country           TEXT DEFAULT 'India',
+  company           TEXT,
+  customer_since    DATE NOT NULL DEFAULT CURRENT_DATE,
+  status            TEXT NOT NULL DEFAULT 'active',    -- active|lapsed|churned|inactive
+  tags              TEXT,
+  notes             TEXT,
+  assigned_to       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  lifetime_value    NUMERIC(14,2) DEFAULT 0,
+  total_purchases   INTEGER DEFAULT 0,
+  last_purchase_at  TIMESTAMPTZ,
+  next_renewal_at   TIMESTAMPTZ,
+  extra_json        JSONB,
+  created_by        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_customers_assigned ON customers(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_customers_status   ON customers(status);
+CREATE INDEX IF NOT EXISTS idx_customers_phone    ON customers(phone);
+
+-- Every transaction (initial sale, renewal, upsell, cross-sell). One
+-- customer, many rows. lifetime_value, total_purchases, last_purchase_at
+-- on the customers row are kept in sync from this table by the
+-- application code so reports stay fast.
+CREATE TABLE IF NOT EXISTS customer_sales (
+  id                 SERIAL PRIMARY KEY,
+  customer_id        INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  product_id         INTEGER REFERENCES products(id) ON DELETE SET NULL,
+  product_name       TEXT,                                 -- snapshot
+  sale_type          TEXT NOT NULL DEFAULT 'new',          -- new|renewal|upgrade|cross_sell
+  sold_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sold_by            INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  amount             NUMERIC(14,2),
+  currency           TEXT DEFAULT 'INR',
+  payment_status     TEXT DEFAULT 'paid',                  -- paid|pending|partial|refunded
+  payment_method     TEXT,                                 -- razorpay|upi|bank|cash|other
+  payment_reference  TEXT,
+  subscription_start DATE,
+  subscription_end   DATE,
+  status             TEXT DEFAULT 'active',                -- active|expired|cancelled
+  notes              TEXT,
+  invoice_url        TEXT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_customer_sales_customer ON customer_sales(customer_id);
+CREATE INDEX IF NOT EXISTS idx_customer_sales_subend   ON customer_sales(subscription_end);
+CREATE INDEX IF NOT EXISTS idx_customer_sales_status   ON customer_sales(status);
+
+-- Free-form remarks per customer — like lead remarks but separate, since
+-- the customer's post-sale conversation continues long after the lead is
+-- closed and we don't want it polluting the lead's audit trail.
+CREATE TABLE IF NOT EXISTS customer_remarks (
+  id           SERIAL PRIMARY KEY,
+  customer_id  INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  user_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  remark       TEXT NOT NULL,
+  remark_type  TEXT DEFAULT 'note',     -- note|call|whatsapp|email|meeting|upsell|complaint
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_customer_remarks_customer ON customer_remarks(customer_id, created_at DESC);
+
+-- ---- v13: monthly targets per user (or org-wide) -----------------------
+-- One row per (user_id, month). user_id = NULL → org-wide target.
+-- Used by the Monthly Target dashboard to compute Achievement %,
+-- Required Daily Target, Forecast etc.

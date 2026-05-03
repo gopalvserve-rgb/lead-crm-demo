@@ -41,6 +41,7 @@ const routes = {
   notifications: require('./routes/notifications'),
   reports:     require('./routes/reports'),
   hr:          require('./routes/hr'),
+  customers:   require('./routes/customers'),
   fb:          require('./routes/fb'),
   automations: require('./routes/automations'),
   whatsapp:    require('./routes/whatsapp'),

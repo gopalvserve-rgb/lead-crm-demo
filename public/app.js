@@ -503,6 +503,8 @@ function showOtpStep(challengeToken, who) {
 const NAV = [
   { id: 'dashboard',  label: 'Dashboard',    icon: '📊' },
   { id: 'leads',      label: 'Leads',        icon: '🎯' },
+  { id: 'customers',  label: 'Customers',    icon: '🤝' },
+  { id: 'custreports', label: 'Cust. reports', icon: '💹', roles: ['admin', 'manager', 'team_leader'] },
   { id: 'newleads',   label: 'New leads',    icon: '✨', countKey: 'new_today' },
   { id: 'overdue',    label: 'Overdue',      icon: '⚠️', countKey: 'overdue' },
   { id: 'duetoday',   label: 'Due today',    icon: '📅', countKey: 'due_today' },
@@ -575,10 +577,9 @@ function renderShell() {
   // Mobile bottom bar: 4 main + More
   const mobilePrimary = ['dashboard', 'leads', 'dialer', 'followups'];
   // Items the admin has hidden via Settings → Menu visibility (CSV in
-  // hidden_nav_ids served by /config.json). The three quick-action
-  // shortcuts (newleads / overdue / upcoming) are hidden by default
-  // since they now live as chips in the topbar; admin can re-enable
-  // them in Settings if they prefer the sidebar links.
+  // hidden_nav_ids served by /config.json). Quick-action shortcuts
+  // (newleads / overdue / upcoming) are hidden by default since they
+  // now live as chips in the topbar.
   const hiddenNavIds = String(CRM.config.hidden_nav_ids || 'newleads,overdue,duetoday,upcoming,dialer')
     .split(',').map(s => s.trim()).filter(Boolean);
   NAV.forEach(item => {
@@ -620,11 +621,16 @@ function renderShell() {
  * for the Android APK if one is hosted in /public/.
  */
 function showGetApp() {
+  // If StockboxCRM.apk is published in /public it'll be served directly.
+  // Otherwise the modal links to PWABuilder with the live URL pre-filled —
+  // same flow used to ship Celeste's APK last time.
   const apkHref = '/SmartCRMDemo.apk';
   const ua = navigator.userAgent || '';
   const isAndroid = /android/i.test(ua);
   const isIOS = /iphone|ipad|ipod/i.test(ua);
   const url = location.origin + '/';
+  const pwaBuilderUrl = 'https://www.pwabuilder.com/reportcard?site=' +
+    encodeURIComponent(location.origin + '/');
   const m = h('div', { class: 'modal-backdrop', onclick: ev => { if (ev.target.classList.contains('modal-backdrop')) m.remove(); } },
     h('div', { class: 'modal' },
       h('div', { class: 'modal-head' },
@@ -646,10 +652,13 @@ function showGetApp() {
             )
           ),
           isAndroid || !isIOS ? h('div', { class: 'card' },
-            h('h4', { style: { margin: '0 0 .5rem' } }, '⬇️ Direct APK (Android)'),
+            h('h4', { style: { margin: '0 0 .5rem' } }, '⬇️ Signed APK (Android)'),
             h('p', { class: 'muted', style: { marginTop: 0 } },
-              'For Android only. You may have to allow "Install from unknown sources".'),
-            h('a', { class: 'btn primary', href: apkHref, download: '' }, 'Download SmartCRMDemo.apk')
+              'If an APK has been published, the first button downloads it. Otherwise build a fresh signed APK with PWABuilder — your live URL is already pre-filled there.'),
+            h('div', { style: { display: 'flex', gap: '.5rem', flexWrap: 'wrap' } },
+              h('a', { class: 'btn primary', href: apkHref, download: '' }, 'Download APK'),
+              h('a', { class: 'btn', href: pwaBuilderUrl, target: '_blank', rel: 'noopener' }, 'Build APK on PWABuilder ↗')
+            )
           ) : null
         )
       )
@@ -1602,9 +1611,7 @@ function renderCell(col, l, statuses) {
           onclick: ev => { ev.stopPropagation(); openInitiateChatModal(l); }
         }, '🟢') : null,
         // Personal WhatsApp — opens a template picker. Picking a template
-        // launches WhatsApp with the message pre-filled (rep just hits
-        // Send). Truly silent sending isn't possible from a personal
-        // number — that's the 🟢 Cloud-API button's job.
+        // launches WhatsApp with the message pre-filled (rep just hits Send).
         digits ? h('button', {
           class: 'btn icon', title: 'Send WhatsApp from my number — pick a template',
           onclick: ev => { ev.stopPropagation(); openPersonalWaPicker(l); }
@@ -2369,9 +2376,7 @@ async function openLeadModal(id) {
     h('button', { class: 'btn icon', onclick: () => modal.remove() }, '✕')
   ));
 
-  // Quick actions row — front-and-centre Call / personal WA / Cloud-API
-  // template / Calendly buttons so reps don't have to hunt for them in
-  // the leads table. Only shows on existing leads with a phone number.
+  // Quick actions row
   if (id && lead.phone) {
     const _digits = String(lead.phone || '').replace(/\D/g, '');
     const _intl = _digits.length === 10 && /^[6-9]/.test(_digits) ? '91' + _digits : _digits;
@@ -2403,11 +2408,9 @@ async function openLeadModal(id) {
     field('next_followup_at', 'Next follow-up', isoToLocalDtInput(lead.next_followup_at), { type: 'datetime-local', id: 'lead-fu' }),
     field('city', 'City', lead.city),
     qualifiedToggle(lead),
-    // Inventory matching inputs — used by api_inventory_match. Reps fill
-    // these on the lead form so the "Matching inventory" panel below can
-    // suggest items the prospect's actually likely to buy.
+    // Inventory matching inputs — used by api_inventory_match.
     field('budget_max', 'Budget (max ₹)', lead.budget_max, { type: 'number', min: 0, step: 1 }),
-    field('requirement_type', 'Requirement type (e.g. 2BHK, Plot, Premium plan)', lead.requirement_type),
+    field('requirement_type', 'Requirement type (e.g. Premium plan, Stock advisory)', lead.requirement_type),
     field('requirement_notes', 'Requirement notes', lead.requirement_notes, { type: 'textarea', full: true }),
     field('notes', 'Notes', lead.notes, { type: 'textarea', full: true })
   );
@@ -2465,6 +2468,18 @@ async function openLeadModal(id) {
   actionsRow.appendChild(h('button', { type: 'button', class: 'btn', onclick: () => modal.remove() }, 'Cancel'));
   if (id && ['admin', 'manager', 'team_leader'].includes(CRM.user.role)) {
     actionsRow.appendChild(h('button', { type: 'button', class: 'btn', onclick: () => openDuplicateAndReassignModal(id, lead, () => { modal.remove(); loadLeads && loadLeads(); }) }, '📋 Duplicate & reassign'));
+  }
+  // "Convert to customer" — only meaningful on existing leads. Encouraged
+  // when status is Won (the prompt below pre-fills the sale row from
+  // lead.value/product), but available at any stage so a closed-by-other-
+  // means lead can still be made a customer manually.
+  if (id) {
+    const isWon = /won/i.test((statuses.find(s => Number(s.id) === Number(lead.status_id)) || {}).name || '');
+    actionsRow.appendChild(h('button', { type: 'button',
+      class: 'btn ' + (isWon ? 'primary' : ''),
+      title: isWon ? 'Lead is Won — record the sale and convert' : 'Manually convert this lead to a customer record',
+      onclick: () => convertLeadToCustomer(id, lead, () => { modal.remove(); loadLeads && loadLeads(); })
+    }, '🤝 Convert to customer'));
   }
   actionsRow.appendChild(h('button', { type: 'submit', form: 'lead-form', class: 'btn primary' }, id ? 'Save changes' : 'Create lead'));
   body.appendChild(actionsRow);
@@ -2726,6 +2741,79 @@ function openNextFollowupModal(row, onSuccess) {
   document.body.appendChild(m);
 }
 
+/**
+ * Convert a lead → customer with an inline "first sale" row, so the
+ * customer is created with their initial purchase already on record.
+ * If the lead was already converted, jumps straight to the customer
+ * detail modal instead of duplicating.
+ */
+function convertLeadToCustomer(leadId, lead, onDone) {
+  const products = CRM.cache.products || [];
+  const today = new Date().toISOString().slice(0, 10);
+  const oneYearLater = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+  const form = h('form', { class: 'form-grid' },
+    h('div', { class: 'f-row full' }, h('label', {}, ''), h('p', { class: 'muted', style: { margin: 0, fontSize: '.85rem' } },
+      'Convert this lead into a customer and record the closing sale. Contact details + address carry over from the lead automatically.')),
+    h('div', { class: 'f-row' }, h('label', {}, 'Sale type'),
+      h('select', { name: 'sale_type' },
+        h('option', { value: 'new', selected: 'selected' }, 'new'),
+        h('option', { value: 'renewal' }, 'renewal'),
+        h('option', { value: 'upgrade' }, 'upgrade'),
+        h('option', { value: 'cross_sell' }, 'cross_sell')
+      )
+    ),
+    h('div', { class: 'f-row' }, h('label', {}, 'Product'),
+      h('select', { name: 'product_id' },
+        h('option', { value: '' }, '—'),
+        ...products.map(p => h('option', { value: p.id, selected: Number(p.id) === Number(lead.product_id) ? 'selected' : null }, p.name))
+      )
+    ),
+    h('div', { class: 'f-row' }, h('label', {}, 'Amount *'), h('input', { name: 'amount', type: 'number', step: '0.01', value: lead.value || '', required: true })),
+    h('div', { class: 'f-row' }, h('label', {}, 'Subscription start'), h('input', { name: 'subscription_start', type: 'date', value: today })),
+    h('div', { class: 'f-row' }, h('label', {}, 'Subscription end'), h('input', { name: 'subscription_end', type: 'date', value: oneYearLater })),
+    h('div', { class: 'f-row' }, h('label', {}, 'Payment status'),
+      h('select', { name: 'payment_status' },
+        ...['paid', 'pending', 'partial'].map(s => h('option', { value: s, selected: s === 'paid' ? 'selected' : null }, s))
+      )
+    ),
+    h('div', { class: 'f-row' }, h('label', {}, 'Payment method'),
+      h('select', { name: 'payment_method' },
+        ...['', 'razorpay', 'upi', 'bank_transfer', 'cash', 'cheque', 'other'].map(s =>
+          h('option', { value: s }, s || '—'))
+      )
+    ),
+    h('div', { class: 'f-row' }, h('label', {}, 'Reference / txn ID'), h('input', { name: 'payment_reference' })),
+    h('div', { class: 'f-row full' }, h('label', {}, 'Notes'), h('textarea', { name: 'notes', value: 'Converted from lead #' + leadId }))
+  );
+  const modal = h('div', { class: 'modal-backdrop' }, h('div', { class: 'modal' },
+    h('div', { class: 'modal-head' },
+      h('h3', {}, '🤝 Convert lead → customer'),
+      h('button', { class: 'btn icon', onclick: () => modal.remove() }, '✕')
+    ),
+    form,
+    h('div', { class: 'actions' },
+      h('button', { class: 'btn', type: 'button', onclick: () => modal.remove() }, 'Cancel'),
+      h('button', { class: 'btn primary', type: 'button', onclick: async () => {
+        const fd = new FormData(form);
+        const sale = {};
+        fd.forEach((v, k) => { sale[k] = v; });
+        try {
+          const r = await api('api_customers_convertFromLead', leadId, sale);
+          if (r.already_existed) {
+            toast('This lead was already converted — opening customer.');
+          } else {
+            toast('Converted to customer');
+          }
+          modal.remove();
+          if (onDone) onDone();
+          openCustomerDetail(r.id);
+        } catch (e) { toast(e.message, 'err'); }
+      } }, 'Convert')
+    )
+  ));
+  document.body.appendChild(modal);
+}
+
 function openDuplicateAndReassignModal(leadId, lead, onSuccess) {
   const { users } = CRM.cache;
   const m = h('div', { class: 'modal-backdrop', onclick: ev => { if (ev.target.classList.contains('modal-backdrop')) m.remove(); } });
@@ -2861,14 +2949,6 @@ function customFieldInput(cf, val) {
  * Always renders a placeholder while loading; on failure, hides itself
  * silently so the modal remains usable on older deploys.
  */
-/**
- * Post-sale project stage tracker block. Shown on every lead detail —
- * if no stages defined yet, shows a hint pointing admin to Settings.
- * If stages exist and the lead has no current stage, shows a "Start
- * delivery tracker" button that sets the first stage. If the lead is
- * mid-flow, shows a horizontal progress strip with the current step
- * highlighted, and an "Advance to next" button.
- */
 function projectStageBlock(leadId, lead) {
   const wrap = h('div', { class: 'card', style: { marginTop: '1rem', padding: '1rem' } },
     h('div', { style: { display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.5rem' } },
@@ -2889,7 +2969,6 @@ function projectStageBlock(leadId, lead) {
       const currentId = Number(lead.project_stage_id) || 0;
       const idx = stages.findIndex(s => Number(s.id) === currentId);
       const isLast = idx === stages.length - 1;
-      // Progress strip
       const strip = h('div', {
         style: { display: 'flex', flexWrap: 'wrap', gap: '.35rem', marginBottom: '.75rem' }
       });
@@ -2907,11 +2986,10 @@ function projectStageBlock(leadId, lead) {
       });
       const advanceBtn = (idx < stages.length - 1) ? h('button', {
         class: 'btn primary', onclick: async () => {
-          const notes = prompt('Optional notes for this transition (e.g. cheque #, doc reference):', '') || '';
+          const notes = prompt('Optional notes for this transition:', '') || '';
           try {
             const r = await api('api_projectStages_advanceLead', leadId, notes);
             toast('Advanced to: ' + r.stage_name);
-            // Re-render the modal so the new stage shows. Easiest path: close and reopen.
             const modal = document.querySelector('.modal-backdrop');
             if (modal) modal.remove();
             openLeadModal(leadId);
@@ -2955,16 +3033,6 @@ function projectStageBlock(leadId, lead) {
   return wrap;
 }
 
-/**
- * Inventory matches block — fetches api_inventory_match(leadId) and renders
- * up to 8 ranked suggestions inline on the lead detail. Each card shows
- * the item, price, type and a "Recommend" button that adds a remark
- * "📦 Recommended <name>" so the team sees what was suggested.
- *
- * The match algorithm filters by status=available, lead.budget_max
- * (with 10% headroom) and lead.requirement_type. Blank inputs = no
- * filter on that axis.
- */
 function matchingInventoryBlock(leadId) {
   const wrap = h('div', { class: 'card', style: { marginTop: '1rem', padding: '1rem' } },
     h('div', { style: { display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.5rem' } },
@@ -3211,6 +3279,656 @@ async function openDuplicateHistory(leadId) {
 
 /* ---------------- Dialer (TeleCRM-style) ---------------- */
 let _dialerState = null;
+
+/* ===========================================================
+ * Customers — post-sale lifecycle.
+ * - List with filters (status, assignee, risk, search, renewals due)
+ * - Detail modal with profile + sales/subscriptions + remarks
+ * - "Add sale" for upsell / renewal / cross-sell
+ * - Convert from Won lead via openLeadModal action button
+ * =========================================================== */
+
+function _custInr(v) {
+  const n = Number(v);
+  if (!isFinite(n) || n <= 0) return '—';
+  if (n >= 10000000) return '₹' + (n / 10000000).toFixed(2) + ' Cr';
+  if (n >= 100000)   return '₹' + (n / 100000).toFixed(2) + ' L';
+  if (n >= 1000)     return '₹' + (n / 1000).toFixed(1) + 'k';
+  return '₹' + n.toFixed(0);
+}
+
+function _custDaysUntil(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  const days = Math.floor((d.getTime() - Date.now()) / 86400000);
+  return days;
+}
+
+function _custRenewalChip(iso) {
+  const days = _custDaysUntil(iso);
+  if (days == null) return h('span', { class: 'muted', style: { fontSize: '.75rem' } }, '—');
+  if (days < 0)  return h('span', { class: 'kc-fu overdue' }, 'Lapsed ' + Math.abs(days) + 'd');
+  if (days <= 7) return h('span', { class: 'kc-fu today' }, 'Renews in ' + days + 'd');
+  if (days <= 30) return h('span', { class: 'kc-fu future', style: { background: 'var(--brand-soft)', color: 'var(--brand-dark)' } }, 'Renews in ' + days + 'd');
+  return h('span', { class: 'kc-fu future' }, 'Renews in ' + days + 'd');
+}
+
+VIEWS.customers = async (view) => {
+  if (!CRM.cache.statuses) await warmCache();
+  view.innerHTML = '';
+
+  const filters = JSON.parse(localStorage.getItem('crm_customers_filters') || '{}');
+  const persist = () => localStorage.setItem('crm_customers_filters', JSON.stringify(filters));
+
+  const search = h('input', { class: 'flex', placeholder: 'Search name / phone / email / PAN…', value: filters.q || '' });
+  let tmr;
+  search.addEventListener('input', () => { filters.q = search.value; clearTimeout(tmr); tmr = setTimeout(() => { persist(); render(); }, 220); });
+
+  const statusSel = selectOpts('cs-status', [
+    { id: '', name: 'Any status' },
+    { id: 'active',   name: '✓ Active' },
+    { id: 'lapsed',   name: '⚠ Lapsed' },
+    { id: 'churned',  name: '✕ Churned' },
+    { id: 'inactive', name: '— Inactive' }
+  ], filters.status);
+  statusSel.addEventListener('change', () => { filters.status = statusSel.value || ''; persist(); render(); });
+
+  const assignSel = selectOpts('cs-assigned',
+    [{ id: '', name: 'Any rep' }, ...(CRM.cache.users || [])],
+    filters.assigned_to);
+  assignSel.addEventListener('change', () => { filters.assigned_to = assignSel.value || ''; persist(); render(); });
+
+  const riskSel = selectOpts('cs-risk', [
+    { id: '', name: 'Any risk' }, { id: 'low', name: 'Low' },
+    { id: 'medium', name: 'Medium' }, { id: 'high', name: 'High' }
+  ], filters.risk_profile);
+  riskSel.addEventListener('change', () => { filters.risk_profile = riskSel.value || ''; persist(); render(); });
+
+  const renewSel = selectOpts('cs-renewal', [
+    { id: '', name: 'All' },
+    { id: '7',  name: '⚠ Renewals in 7 days' },
+    { id: '15', name: 'Renewals in 15 days' },
+    { id: '30', name: 'Renewals in 30 days' }
+  ], filters.renewal_in_days);
+  renewSel.addEventListener('change', () => { filters.renewal_in_days = renewSel.value || ''; persist(); render(); });
+
+  view.appendChild(h('div', { class: 'toolbar' },
+    search, statusSel, assignSel, riskSel, renewSel,
+    h('button', { class: 'btn', onclick: () => render() }, '🔎'),
+    h('button', { class: 'btn ghost', title: 'Reset filters', onclick: () => {
+      Object.keys(filters).forEach(k => delete filters[k]); persist(); render();
+    } }, '✕'),
+    h('button', { class: 'btn primary', onclick: () => openCustomerModal() }, '+ New Customer')
+  ));
+
+  // Bulk-bar — visible only when at least one customer is checked.
+  const bulkBar = h('div', { class: 'bulk-bar', id: 'cust-bulk-bar', hidden: true },
+    h('span', { id: 'cust-bulk-count', class: 'bulk-count' }, '0 selected'),
+    h('button', { class: 'btn sm', onclick: () => bulkCustomersWhatsApp() }, '💬 WhatsApp'),
+    h('button', { class: 'btn sm ghost', onclick: () => clearCustomerSelection() }, 'Clear')
+  );
+  view.appendChild(bulkBar);
+
+  const tableWrap = h('div', { class: 'table-wrap' });
+  view.appendChild(tableWrap);
+
+  async function render() {
+    const list = await api('api_customers_list', filters);
+    tableWrap.innerHTML = '';
+    if (!list.length) {
+      tableWrap.appendChild(h('div', { class: 'muted', style: { padding: '2rem', textAlign: 'center' } },
+        'No customers yet. Convert a Won lead from the Leads list to start.'));
+      return;
+    }
+    CRM._customersOnPage = list.map(c => Number(c.id));
+    const table = h('table', { class: 'leads-table' });
+    table.appendChild(h('thead', {}, h('tr', {},
+      h('th', { style: { width: '32px' } }, h('input', { type: 'checkbox', id: 'cust-check-all', onclick: ev => toggleAllCustomers(ev.target.checked) })),
+      h('th', {}, 'Name'),
+      h('th', {}, 'Phone'),
+      h('th', {}, 'Status'),
+      h('th', {}, 'Risk'),
+      h('th', { style: { textAlign: 'right' } }, 'Lifetime'),
+      h('th', { style: { textAlign: 'center' } }, 'Buys'),
+      h('th', {}, 'Next renewal'),
+      h('th', {}, 'Owner')
+    )));
+    const tbody = h('tbody', {});
+    list.forEach(c => {
+      const checkbox = h('input', { type: 'checkbox', class: 'cust-check', 'data-cust-id': String(c.id),
+        onclick: ev => { ev.stopPropagation(); refreshCustBulkBar(); } });
+      const tr = h('tr', { onclick: ev => {
+          // Don't open detail when the click was on the checkbox
+          if (ev.target.classList.contains('cust-check') || ev.target.closest('.cust-check')) return;
+          openCustomerDetail(c.id);
+        }, style: { cursor: 'pointer' } },
+        h('td', { onclick: ev => ev.stopPropagation() }, checkbox),
+        h('td', {}, h('strong', {}, c.name || '—')),
+        h('td', { class: 'cell-phone' }, c.phone || ''),
+        h('td', {}, h('span', { class: 'tag', style: {
+          background: c.status === 'active' ? 'var(--ok-soft)' : c.status === 'lapsed' ? 'var(--warn-soft)' : 'var(--err-soft)',
+          color:      c.status === 'active' ? 'var(--ok)'      : c.status === 'lapsed' ? 'var(--warn)'      : 'var(--err)'
+        } }, c.status || '—')),
+        h('td', {}, c.risk_profile || '—'),
+        h('td', { style: { textAlign: 'right', fontWeight: 500 } }, _custInr(c.lifetime_value)),
+        h('td', { style: { textAlign: 'center' } }, c.total_purchases || 0),
+        h('td', {}, _custRenewalChip(c.next_renewal_at)),
+        h('td', {}, c.assigned_name || '—')
+      );
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    tableWrap.appendChild(table);
+    refreshCustBulkBar();
+  }
+  render();
+};
+
+function selectedCustomerIds() {
+  return Array.from(document.querySelectorAll('.cust-check:checked'))
+    .map(el => Number(el.dataset.custId));
+}
+function refreshCustBulkBar() {
+  const ids = selectedCustomerIds();
+  const bar = document.getElementById('cust-bulk-bar');
+  const count = document.getElementById('cust-bulk-count');
+  if (!bar) return;
+  if (ids.length) {
+    bar.hidden = false;
+    count.textContent = ids.length + ' selected';
+  } else {
+    bar.hidden = true;
+  }
+}
+function toggleAllCustomers(checked) {
+  document.querySelectorAll('.cust-check').forEach(el => { el.checked = !!checked; });
+  refreshCustBulkBar();
+}
+function clearCustomerSelection() {
+  document.querySelectorAll('.cust-check').forEach(el => { el.checked = false; });
+  const all = document.getElementById('cust-check-all'); if (all) all.checked = false;
+  refreshCustBulkBar();
+}
+
+/**
+ * Bulk WhatsApp send to selected customers — same flow as the leads
+ * version but routes through api_customers_bulkWhatsApp so each send is
+ * additionally logged as a customer_remark of type 'whatsapp'.
+ */
+async function bulkCustomersWhatsApp() {
+  const ids = selectedCustomerIds();
+  if (!ids.length) return;
+  const templates = await api('api_wb_templates_list').catch(() => []);
+  if (!templates.length) {
+    return toast('No approved templates yet — sync from Meta in WhatsBot tab', 'err');
+  }
+
+  const tplSel = h('select', { id: 'bcw-tpl' },
+    ...templates.map(t => h('option', { value: t.name + '|' + (t.language || 'en_US') },
+      `${t.name} · ${t.language || 'en_US'}`))
+  );
+  const varsBox = h('div', { id: 'bcw-vars', style: { display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' } });
+  const previewBox = h('div', { class: 'muted', id: 'bcw-preview',
+    style: { background: 'var(--bg-alt)', padding: '8px 10px', borderRadius: '6px', fontSize: '.82rem', whiteSpace: 'pre-wrap', marginTop: '8px', minHeight: '40px' } });
+
+  const updatePreview = () => {
+    const sel = tplSel.value || '';
+    const [name, lang] = sel.split('|');
+    const tpl = templates.find(t => t.name === name && (t.language || 'en_US') === lang);
+    let body = String(tpl?.body_text || '');
+    Array.from(varsBox.querySelectorAll('.bcw-var')).forEach((inp, i) => {
+      const v = inp.value || ('{{' + (i + 1) + '}}');
+      body = body.replace(new RegExp('\\{\\{' + (i + 1) + '\\}\\}', 'g'), v);
+    });
+    previewBox.textContent = body || '(empty template)';
+  };
+
+  const renderVars = () => {
+    const sel = tplSel.value || '';
+    const [name, lang] = sel.split('|');
+    const tpl = templates.find(t => t.name === name && (t.language || 'en_US') === lang);
+    const params = (tpl?.body_params || []);
+    const count = Array.isArray(params) ? params.length :
+      ((tpl?.body_text || '').match(/\{\{\d+\}\}/g) || []).length;
+    varsBox.innerHTML = '';
+    if (!count) {
+      varsBox.appendChild(h('div', { class: 'muted', style: { fontSize: '.78rem' } }, 'No variables in this template.'));
+    } else {
+      for (let i = 0; i < count; i++) {
+        const inp = h('input', { class: 'bcw-var', placeholder: 'Use @{name} for per-customer name', 'data-idx': String(i) });
+        const row = h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } },
+          h('span', { class: 'muted', style: { minWidth: '70px', fontSize: '.78rem' } }, '{{' + (i + 1) + '}}'),
+          inp,
+          h('button', { type: 'button', class: 'btn sm ghost', onclick: () => { inp.value = '@{firstname}'; updatePreview(); } }, '@name')
+        );
+        inp.addEventListener('input', updatePreview);
+        varsBox.appendChild(row);
+      }
+    }
+    updatePreview();
+  };
+  tplSel.addEventListener('change', renderVars);
+
+  const modal = h('div', { class: 'modal-backdrop' }, h('div', { class: 'modal' },
+    h('div', { class: 'modal-head' },
+      h('h3', {}, `💬 WhatsApp to ${ids.length} customer${ids.length === 1 ? '' : 's'}`),
+      h('button', { class: 'btn icon', onclick: () => modal.remove() }, '✕')
+    ),
+    h('p', { class: 'muted', style: { marginTop: 0, fontSize: '.82rem' } },
+      'Pick an approved template. Use @{firstname}, @{name}, @{phone}, @{email} for per-customer substitution. Each send is logged as a remark on the customer\'s post-sale history.'),
+    h('label', {}, 'Template'), tplSel,
+    h('label', { style: { marginTop: '10px' } }, 'Variables'), varsBox,
+    h('label', { style: { marginTop: '10px' } }, 'Preview (first customer)'), previewBox,
+    h('div', { class: 'actions' },
+      h('button', { class: 'btn', onclick: () => modal.remove() }, 'Cancel'),
+      h('button', { class: 'btn primary', onclick: async () => {
+        const sel = tplSel.value || '';
+        const [name, lang] = sel.split('|');
+        const variables = Array.from(varsBox.querySelectorAll('.bcw-var')).map(inp => ({ value: inp.value || '' }));
+        try {
+          const r = await api('api_customers_bulkWhatsApp', ids, name, lang, variables);
+          toast(`Sent ${r.sent} of ${r.total}` + (r.failed ? ` · ${r.failed} failed` : ''));
+          modal.remove();
+          clearCustomerSelection();
+        } catch (e) { toast(e.message, 'err'); }
+      } }, `Send to ${ids.length}`)
+    )
+  ));
+  document.body.appendChild(modal);
+  renderVars();
+}
+
+/* ===========================================================
+ * Customer Reports — MRR, renewal rate, top by LTV, sales trends.
+ * =========================================================== */
+VIEWS.custreports = async (view) => {
+  view.innerHTML = '';
+  view.appendChild(h('div', { id: 'cr-loading', class: 'muted', style: { padding: '2rem', textAlign: 'center' } }, 'Crunching numbers…'));
+  let r;
+  try { r = await api('api_customers_reports', { months_back: 12 }); }
+  catch (e) { view.innerHTML = ''; return view.appendChild(h('div', { class: 'error' }, e.message)); }
+  view.innerHTML = '';
+  const k = r.kpis;
+
+  // Helper: KPI tile
+  const kpi = (label, value, sub, color) => h('div', { style: {
+    background: color || 'var(--bg-alt)', padding: '14px 16px', borderRadius: '8px',
+    minWidth: '0'
+  } },
+    h('div', { class: 'muted', style: { fontSize: '.72rem', textTransform: 'uppercase', letterSpacing: '.05em' } }, label),
+    h('div', { style: { fontSize: '1.6rem', fontWeight: 600, marginTop: '2px' } }, value),
+    sub ? h('div', { class: 'muted', style: { fontSize: '.72rem', marginTop: '2px' } }, sub) : null
+  );
+
+  // ---- KPI grid -------------------------------------------------------
+  view.appendChild(h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', marginBottom: '14px' } },
+    kpi('Total customers', k.total_customers, k.active + ' active · ' + k.lapsed + ' lapsed'),
+    kpi('MRR (current)', _custInr(k.mrr), 'monthly recurring revenue', 'var(--brand-soft)'),
+    kpi('Lifetime revenue', _custInr(k.total_lifetime), 'avg ' + _custInr(k.avg_lifetime) + ' / customer', 'var(--ok-soft)'),
+    kpi('Renewal rate (90d)',
+      k.renewal_rate == null ? '—' : (Math.round(k.renewal_rate * 100) + '%'),
+      k.renewal_rate == null ? 'no expiries yet' : (k.renewals_renewed + ' of ' + k.renewals_expired_window + ' expired'),
+      'var(--warn-soft)'),
+    kpi('Renewals due 7d', k.renewals_due_7d, k.renewals_due_30d + ' in 30d · ' + k.renewals_due_90d + ' in 90d', 'var(--err-soft)')
+  ));
+
+  // ---- Sales by month chart ------------------------------------------
+  if (r.sales_by_month.length) {
+    view.appendChild(h('h3', { style: { marginBottom: '6px' } }, 'Revenue by month'));
+    const wrap = h('div', { class: 'chart-wrap', style: { height: '260px', marginBottom: '20px' } });
+    const canvas = h('canvas', { id: 'cr-chart-month' });
+    wrap.appendChild(canvas);
+    view.appendChild(wrap);
+    setTimeout(() => {
+      // eslint-disable-next-line no-undef
+      const ctx = canvas.getContext('2d');
+      // eslint-disable-next-line no-undef
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: r.sales_by_month.map(m => m.month),
+          datasets: [
+            { label: 'Revenue', data: r.sales_by_month.map(m => Math.round(m.amount)), backgroundColor: '#b9f23c' }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { callback: v => _custInr(v) } } }
+        }
+      });
+    }, 10);
+  }
+
+  // ---- Top by LTV table ----------------------------------------------
+  view.appendChild(h('h3', { style: { marginBottom: '6px', marginTop: '16px' } }, 'Top 10 customers by lifetime value'));
+  const ltvTable = h('table', { class: 'leads-table' },
+    h('thead', {}, h('tr', {},
+      h('th', {}, 'Customer'),
+      h('th', {}, 'Status'),
+      h('th', { style: { textAlign: 'right' } }, 'Lifetime'),
+      h('th', { style: { textAlign: 'center' } }, 'Buys'),
+      h('th', {}, 'Owner')
+    )),
+    h('tbody', {}, ...(r.top_by_ltv.length ? r.top_by_ltv.map(c => h('tr', { onclick: () => openCustomerDetail(c.id), style: { cursor: 'pointer' } },
+      h('td', {}, h('strong', {}, c.name || '—'), c.phone ? h('div', { class: 'muted', style: { fontSize: '.75rem' } }, c.phone) : null),
+      h('td', {}, c.status),
+      h('td', { style: { textAlign: 'right', fontWeight: 500 } }, _custInr(c.lifetime_value)),
+      h('td', { style: { textAlign: 'center' } }, c.total_purchases || 0),
+      h('td', {}, c.assigned_name || '—')
+    )) : [h('tr', {}, h('td', { colspan: 5, class: 'muted', style: { textAlign: 'center', padding: '14px' } }, 'No customers yet.'))]))
+  );
+  view.appendChild(ltvTable);
+
+  // ---- Sales by product + by rep, side by side -----------------------
+  view.appendChild(h('h3', { style: { marginBottom: '6px', marginTop: '16px' } }, 'Where the money is coming from'));
+  const splitGrid = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' } });
+  const productTable = h('div', {},
+    h('div', { class: 'muted', style: { fontSize: '.78rem', marginBottom: '4px' } }, 'By product'),
+    h('table', { class: 'leads-table' },
+      h('thead', {}, h('tr', {}, h('th', {}, 'Product'), h('th', { style: { textAlign: 'center' } }, 'Sales'), h('th', { style: { textAlign: 'right' } }, 'Revenue'))),
+      h('tbody', {}, ...(r.sales_by_product.length ? r.sales_by_product.map(p => h('tr', {},
+        h('td', {}, p.product),
+        h('td', { style: { textAlign: 'center' } }, p.count),
+        h('td', { style: { textAlign: 'right', fontWeight: 500 } }, _custInr(p.amount))
+      )) : [h('tr', {}, h('td', { colspan: 3, class: 'muted', style: { textAlign: 'center', padding: '14px' } }, 'No sales yet.'))]))
+    )
+  );
+  const repTable = h('div', {},
+    h('div', { class: 'muted', style: { fontSize: '.78rem', marginBottom: '4px' } }, 'By rep'),
+    h('table', { class: 'leads-table' },
+      h('thead', {}, h('tr', {}, h('th', {}, 'Rep'), h('th', { style: { textAlign: 'center' } }, 'Sales'), h('th', { style: { textAlign: 'right' } }, 'Revenue'))),
+      h('tbody', {}, ...(r.sales_by_rep.length ? r.sales_by_rep.map(rep => h('tr', {},
+        h('td', {}, rep.rep),
+        h('td', { style: { textAlign: 'center' } }, rep.count),
+        h('td', { style: { textAlign: 'right', fontWeight: 500 } }, _custInr(rep.amount))
+      )) : [h('tr', {}, h('td', { colspan: 3, class: 'muted', style: { textAlign: 'center', padding: '14px' } }, 'No sales yet.'))]))
+    )
+  );
+  splitGrid.appendChild(productTable);
+  splitGrid.appendChild(repTable);
+  view.appendChild(splitGrid);
+
+  // ---- Customer growth chart -----------------------------------------
+  if (r.customer_growth.length) {
+    view.appendChild(h('h3', { style: { marginBottom: '6px', marginTop: '20px' } }, 'New customers per month'));
+    const wrap = h('div', { class: 'chart-wrap', style: { height: '220px', marginBottom: '12px' } });
+    const canvas = h('canvas', { id: 'cr-chart-growth' });
+    wrap.appendChild(canvas);
+    view.appendChild(wrap);
+    setTimeout(() => {
+      const ctx = canvas.getContext('2d');
+      // eslint-disable-next-line no-undef
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: r.customer_growth.map(m => m.month),
+          datasets: [{
+            label: 'New customers', data: r.customer_growth.map(m => m.count),
+            borderColor: '#b9f23c', backgroundColor: 'rgba(185,242,60,.18)',
+            tension: .3, fill: true
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      });
+    }, 10);
+  }
+};
+
+function openCustomerModal(initial) {
+  const c = Object.assign({ status: 'active', country: 'India' }, initial || {});
+  const fld = (name, label, value, opts) => {
+    const inp = h('input', Object.assign({ name, value: value == null ? '' : value }, opts || {}));
+    return h('div', { class: 'f-row' }, h('label', {}, label), inp);
+  };
+  const sel = (name, label, value, options) => {
+    const s = h('select', { name },
+      ...options.map(o => h('option', { value: o.value, selected: String(o.value) === String(value || '') ? 'selected' : null }, o.label))
+    );
+    return h('div', { class: 'f-row' }, h('label', {}, label), s);
+  };
+  const form = h('form', { class: 'form-grid' },
+    fld('name', 'Name *', c.name, { required: true }),
+    fld('phone', 'Phone *', c.phone, { required: true }),
+    fld('email', 'Email', c.email, { type: 'email' }),
+    fld('whatsapp', 'WhatsApp', c.whatsapp || c.phone),
+    fld('alt_phone', 'Alt phone', c.alt_phone),
+    fld('pan', 'PAN', c.pan, { maxlength: 10, style: 'text-transform:uppercase' }),
+    fld('date_of_birth', 'DOB', c.date_of_birth, { type: 'date' }),
+    sel('gender', 'Gender', c.gender, [
+      { value: '', label: '—' }, { value: 'M', label: 'Male' },
+      { value: 'F', label: 'Female' }, { value: 'O', label: 'Other' }
+    ]),
+    fld('occupation', 'Occupation', c.occupation),
+    sel('income_range', 'Income', c.income_range, [
+      { value: '', label: '—' }, { value: '<5L', label: '< ₹5L' },
+      { value: '5-15L', label: '₹5L-15L' }, { value: '15-50L', label: '₹15L-50L' },
+      { value: '50L-1Cr', label: '₹50L-1Cr' }, { value: '>1Cr', label: '> ₹1Cr' }
+    ]),
+    sel('risk_profile', 'Risk profile', c.risk_profile, [
+      { value: '', label: '—' }, { value: 'low', label: 'Low' },
+      { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }
+    ]),
+    sel('status', 'Status', c.status, [
+      { value: 'active',   label: 'Active' }, { value: 'lapsed',   label: 'Lapsed' },
+      { value: 'churned',  label: 'Churned' }, { value: 'inactive', label: 'Inactive' }
+    ]),
+    sel('assigned_to', 'Owner', c.assigned_to,
+      (CRM.cache.users || []).map(u => ({ value: u.id, label: u.name }))),
+    fld('city', 'City', c.city),
+    fld('state', 'State', c.state),
+    fld('pincode', 'Pincode', c.pincode),
+    fld('company', 'Company', c.company),
+    h('div', { class: 'f-row full' }, h('label', {}, 'Address'), h('textarea', { name: 'address' }, c.address || '')),
+    h('div', { class: 'f-row full' }, h('label', {}, 'Notes'), h('textarea', { name: 'notes' }, c.notes || ''))
+  );
+
+  const modal = h('div', { class: 'modal-backdrop' }, h('div', { class: 'modal modal-lg' },
+    h('div', { class: 'modal-head' },
+      h('h3', {}, c.id ? '✏️ Edit Customer' : '+ New Customer'),
+      h('button', { class: 'btn icon', onclick: () => modal.remove() }, '✕')
+    ),
+    form,
+    h('div', { class: 'actions' },
+      h('button', { class: 'btn', type: 'button', onclick: () => modal.remove() }, 'Cancel'),
+      h('button', { class: 'btn primary', type: 'button', onclick: async () => {
+        const fd = new FormData(form);
+        const payload = {};
+        fd.forEach((v, k) => { payload[k] = v; });
+        try {
+          if (c.id) await api('api_customers_update', c.id, payload);
+          else      await api('api_customers_create', payload);
+          toast('Saved');
+          modal.remove();
+          navigateTo('customers');
+        } catch (e) { toast(e.message, 'err'); }
+      } }, c.id ? 'Save changes' : 'Create')
+    )
+  ));
+  document.body.appendChild(modal);
+}
+
+async function openCustomerDetail(customerId) {
+  let data;
+  try { data = await api('api_customers_get', customerId); }
+  catch (e) { return toast(e.message, 'err'); }
+  const { customer: c, sales, remarks } = data;
+
+  const profileBox = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '4px 18px', fontSize: '.85rem' } },
+    h('div', {}, h('span', { class: 'muted' }, 'Phone: '), c.phone || '—'),
+    h('div', {}, h('span', { class: 'muted' }, 'Email: '), c.email || '—'),
+    h('div', {}, h('span', { class: 'muted' }, 'PAN: '), c.pan || '—'),
+    h('div', {}, h('span', { class: 'muted' }, 'DOB: '), c.date_of_birth || '—'),
+    h('div', {}, h('span', { class: 'muted' }, 'Risk profile: '), c.risk_profile || '—'),
+    h('div', {}, h('span', { class: 'muted' }, 'Income: '), c.income_range || '—'),
+    h('div', {}, h('span', { class: 'muted' }, 'City: '), c.city || '—'),
+    h('div', {}, h('span', { class: 'muted' }, 'Owner: '), c.assigned_name || '—'),
+    h('div', {}, h('span', { class: 'muted' }, 'Customer since: '), c.customer_since || '—'),
+    h('div', {}, h('span', { class: 'muted' }, 'Lifetime value: '), h('strong', {}, _custInr(c.lifetime_value)))
+  );
+
+  const summaryStrip = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', margin: '12px 0', textAlign: 'center' } },
+    h('div', { style: { background: 'var(--brand-soft)', padding: '10px', borderRadius: '6px' } },
+      h('div', { style: { fontSize: '1.4rem', fontWeight: 600 } }, _custInr(c.lifetime_value)),
+      h('div', { class: 'muted', style: { fontSize: '.72rem' } }, 'Lifetime')
+    ),
+    h('div', { style: { background: 'var(--ok-soft)', padding: '10px', borderRadius: '6px' } },
+      h('div', { style: { fontSize: '1.4rem', fontWeight: 600 } }, c.total_purchases || 0),
+      h('div', { class: 'muted', style: { fontSize: '.72rem' } }, 'Purchases')
+    ),
+    h('div', { style: { background: 'var(--bg-alt)', padding: '10px', borderRadius: '6px' } },
+      h('div', { style: { fontSize: '1.4rem', fontWeight: 600 } }, c.last_purchase_at ? fmtDate(c.last_purchase_at, 'short') : '—'),
+      h('div', { class: 'muted', style: { fontSize: '.72rem' } }, 'Last buy')
+    ),
+    h('div', { style: { background: 'var(--warn-soft)', padding: '10px', borderRadius: '6px' } },
+      h('div', { style: { fontSize: '1.4rem', fontWeight: 600 } }, c.next_renewal_at ? fmtDate(c.next_renewal_at, 'short') : '—'),
+      h('div', { class: 'muted', style: { fontSize: '.72rem' } }, 'Next renewal')
+    )
+  );
+
+  // Sales table
+  const salesTable = h('table', { class: 'leads-table', style: { fontSize: '.82rem' } },
+    h('thead', {}, h('tr', {},
+      h('th', {}, 'Date'), h('th', {}, 'Product'), h('th', {}, 'Type'),
+      h('th', { style: { textAlign: 'right' } }, 'Amount'),
+      h('th', {}, 'Subscription'), h('th', {}, 'Status'), h('th', {}, 'Sold by')
+    )),
+    h('tbody', {}, ...(sales.length ? sales.map(s => h('tr', {},
+      h('td', {}, fmtDate(s.sold_at, 'short')),
+      h('td', {}, s.product_name || '—'),
+      h('td', {}, h('span', { class: 'tag', style: {
+        background: s.sale_type === 'new' ? 'var(--brand-soft)' :
+                    s.sale_type === 'renewal' ? 'var(--ok-soft)' :
+                    s.sale_type === 'upgrade' ? 'var(--warn-soft)' : 'var(--bg-alt)',
+        color: 'var(--text)'
+      } }, s.sale_type)),
+      h('td', { style: { textAlign: 'right', fontWeight: 500 } }, _custInr(s.amount)),
+      h('td', {},
+        s.subscription_start && s.subscription_end
+          ? (s.subscription_start.slice(0, 10) + ' → ' + s.subscription_end.slice(0, 10))
+          : '—'),
+      h('td', {}, s.status),
+      h('td', {}, s.sold_by_name || '—')
+    )) : [h('tr', {}, h('td', { colspan: 7, class: 'muted', style: { textAlign: 'center', padding: '14px' } }, 'No sales recorded yet.'))])
+    )
+  );
+
+  // Remarks list + add
+  const remarkInput = h('textarea', { rows: 2, placeholder: 'Add a note, call summary, complaint, upsell attempt…' });
+  const remarkType = h('select', { style: { maxWidth: '160px' } },
+    h('option', { value: 'note' }, '📝 Note'),
+    h('option', { value: 'call' }, '📞 Call'),
+    h('option', { value: 'whatsapp' }, '💬 WhatsApp'),
+    h('option', { value: 'meeting' }, '👥 Meeting'),
+    h('option', { value: 'upsell' }, '🚀 Upsell attempt'),
+    h('option', { value: 'complaint' }, '⚠ Complaint')
+  );
+  const remarksList = h('div', { class: 'timeline', style: { marginTop: '10px' } },
+    ...(remarks.length ? remarks.map(r => h('li', { style: { padding: '6px 0', listStyle: 'none', borderTop: '1px solid var(--border-light)' } },
+      h('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: '.78rem' } },
+        h('span', { class: 'muted' }, r.user_name + ' · ' + (r.remark_type || 'note')),
+        h('span', { class: 'muted' }, fmtDate(r.created_at, 'relative'))
+      ),
+      h('div', { style: { fontSize: '.88rem', whiteSpace: 'pre-wrap' } }, r.remark)
+    )) : [h('div', { class: 'muted', style: { padding: '10px', textAlign: 'center' } }, 'No remarks yet.')])
+  );
+
+  const modal = h('div', { class: 'modal-backdrop' }, h('div', { class: 'modal modal-lg' },
+    h('div', { class: 'modal-head' },
+      h('h3', {}, '🤝 ' + (c.name || 'Customer')),
+      h('div', { style: { display: 'flex', gap: '6px' } },
+        h('button', { class: 'btn sm', onclick: () => { modal.remove(); openCustomerModal(c); } }, '✏️ Edit'),
+        h('button', { class: 'btn icon', onclick: () => modal.remove() }, '✕')
+      )
+    ),
+    profileBox,
+    summaryStrip,
+    h('h4', { style: { margin: '14px 0 6px' } }, 'Sales & Subscriptions'),
+    h('div', { style: { overflowX: 'auto' } }, salesTable),
+    h('div', { style: { marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+      h('button', { class: 'btn primary', onclick: () => openSaleModal(c.id, 'new', () => { modal.remove(); openCustomerDetail(c.id); }) }, '+ Add sale'),
+      h('button', { class: 'btn', onclick: () => openSaleModal(c.id, 'renewal', () => { modal.remove(); openCustomerDetail(c.id); }) }, '🔄 Record renewal'),
+      h('button', { class: 'btn', onclick: () => openSaleModal(c.id, 'upgrade', () => { modal.remove(); openCustomerDetail(c.id); }) }, '⬆ Upgrade'),
+      h('button', { class: 'btn', onclick: () => openSaleModal(c.id, 'cross_sell', () => { modal.remove(); openCustomerDetail(c.id); }) }, '🛒 Cross-sell')
+    ),
+    h('h4', { style: { margin: '18px 0 6px' } }, 'Remarks'),
+    h('div', { style: { display: 'flex', gap: '6px', marginBottom: '6px' } },
+      remarkType,
+      h('button', { class: 'btn sm', onclick: async () => {
+        const txt = remarkInput.value.trim();
+        if (!txt) return toast('Type a remark first', 'err');
+        try {
+          await api('api_customers_addRemark', c.id, { remark: txt, remark_type: remarkType.value });
+          modal.remove(); openCustomerDetail(c.id);
+        } catch (e) { toast(e.message, 'err'); }
+      } }, '+ Add')
+    ),
+    remarkInput,
+    remarksList
+  ));
+  document.body.appendChild(modal);
+}
+
+function openSaleModal(customerId, defaultType, onDone) {
+  const products = CRM.cache.products || [];
+  const today = new Date().toISOString().slice(0, 10);
+  const oneYearLater = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+  const form = h('form', { class: 'form-grid' },
+    h('div', { class: 'f-row' }, h('label', {}, 'Sale type'),
+      h('select', { name: 'sale_type' },
+        ...['new', 'renewal', 'upgrade', 'cross_sell'].map(t =>
+          h('option', { value: t, selected: t === defaultType ? 'selected' : null }, t.replace('_', ' ')))
+      )
+    ),
+    h('div', { class: 'f-row' }, h('label', {}, 'Product'),
+      h('select', { name: 'product_id' },
+        h('option', { value: '' }, '—'),
+        ...products.map(p => h('option', { value: p.id }, p.name))
+      )
+    ),
+    h('div', { class: 'f-row' }, h('label', {}, 'Amount *'), h('input', { name: 'amount', type: 'number', step: '0.01', required: true })),
+    h('div', { class: 'f-row' }, h('label', {}, 'Currency'), h('input', { name: 'currency', value: 'INR' })),
+    h('div', { class: 'f-row' }, h('label', {}, 'Subscription start'), h('input', { name: 'subscription_start', type: 'date', value: today })),
+    h('div', { class: 'f-row' }, h('label', {}, 'Subscription end'), h('input', { name: 'subscription_end', type: 'date', value: oneYearLater })),
+    h('div', { class: 'f-row' }, h('label', {}, 'Payment status'),
+      h('select', { name: 'payment_status' },
+        ...['paid', 'pending', 'partial', 'refunded'].map(s =>
+          h('option', { value: s, selected: s === 'paid' ? 'selected' : null }, s))
+      )
+    ),
+    h('div', { class: 'f-row' }, h('label', {}, 'Payment method'),
+      h('select', { name: 'payment_method' },
+        ...['', 'razorpay', 'upi', 'bank_transfer', 'cash', 'cheque', 'other'].map(s =>
+          h('option', { value: s }, s || '—'))
+      )
+    ),
+    h('div', { class: 'f-row' }, h('label', {}, 'Reference / txn ID'), h('input', { name: 'payment_reference' })),
+    h('div', { class: 'f-row full' }, h('label', {}, 'Notes'), h('textarea', { name: 'notes' }))
+  );
+  const modal = h('div', { class: 'modal-backdrop' }, h('div', { class: 'modal' },
+    h('div', { class: 'modal-head' },
+      h('h3', {}, '+ Record sale'),
+      h('button', { class: 'btn icon', onclick: () => modal.remove() }, '✕')
+    ),
+    form,
+    h('div', { class: 'actions' },
+      h('button', { class: 'btn', type: 'button', onclick: () => modal.remove() }, 'Cancel'),
+      h('button', { class: 'btn primary', type: 'button', onclick: async () => {
+        const fd = new FormData(form);
+        const payload = {};
+        fd.forEach((v, k) => { payload[k] = v; });
+        try {
+          await api('api_customers_addSale', customerId, payload);
+          toast('Sale recorded');
+          modal.remove();
+          if (onDone) onDone();
+        } catch (e) { toast(e.message, 'err'); }
+      } }, 'Save sale')
+    )
+  ));
+  document.body.appendChild(modal);
+}
 
 VIEWS.dialer = async (view) => {
   // Tab state: 'pad' (dialpad) | 'history' (call log) | 'recordings' (audio list)
@@ -5358,11 +6076,6 @@ function sendCalendlyLink(lead) {
   window.open(waUrl, '_blank');
 }
 
-/**
- * Substitute {placeholders} in a personal WA template body with values
- * from the lead and current user. Unknown tokens are left in place so
- * the rep can spot mistakes.
- */
 function _renderPersonalWaTemplate(body, lead) {
   const me = CRM.user || {};
   const ctx = {
@@ -5378,12 +6091,6 @@ function _renderPersonalWaTemplate(body, lead) {
   return String(body || '').replace(/\{(\w+)\}/g, (m, k) => ctx[k] != null ? ctx[k] : m);
 }
 
-/**
- * 💬 personal WhatsApp picker — opens a small modal with the rep's
- * saved templates. Picking one substitutes lead/user placeholders and
- * launches wa.me with the full message pre-filled. Includes a
- * "Blank — just open chat" shortcut and a "Manage templates" link.
- */
 async function openPersonalWaPicker(lead) {
   const phone = String(lead?.phone || '').replace(/\D/g, '');
   if (!phone) { toast('Lead has no phone number', 'err'); return; }
@@ -5431,10 +6138,6 @@ async function openPersonalWaPicker(lead) {
   document.body.appendChild(modal);
 }
 
-/**
- * CRUD modal for the rep's personal WhatsApp templates. Per-user.
- * Body supports placeholders documented in the help text.
- */
 async function openPersonalWaTemplatesModal() {
   let templates = [];
   try { templates = await api('api_personalWa_list'); } catch (_) {}
@@ -5471,11 +6174,11 @@ async function openPersonalWaTemplatesModal() {
         h('form', { id: 'pwa-tpl-form', class: 'form-grid' },
           h('div', { class: 'f-row full' },
             h('label', {}, 'Template name'),
-            h('input', { name: 'name', value: t.name, placeholder: 'e.g. Site visit reminder', required: 'required' })
+            h('input', { name: 'name', value: t.name, placeholder: 'e.g. Plan reminder', required: 'required' })
           ),
           h('div', { class: 'f-row full' },
             h('label', {}, 'Message body'),
-            h('textarea', { name: 'body', rows: 6, placeholder: 'Hi {first_name}, this is {my_name} from Adbullet — just confirming our site visit tomorrow at 11 AM. Reply YES to confirm.' }, t.body || '')
+            h('textarea', { name: 'body', rows: 6, placeholder: 'Hi {first_name}, this is {my_name} from Stockbox — confirming our review call. Reply YES to confirm.' }, t.body || '')
           ),
           h('div', { class: 'f-row full' },
             h('p', { class: 'muted', style: { margin: 0, fontSize: '.78rem' } },
@@ -5900,7 +6603,7 @@ async function wbCampaigns() {
       h('td', {}, c.recipients_delivered),
       h('td', {}, c.recipients_read),
       h('td', {}, c.recipients_failed),
-      h('td', {}, h('span', { class: 'tag', style: { background: c.status === 'completed' ? '#10b981' : c.status === 'sending' ? '#6366f1' : c.status === 'failed' ? '#ef4444' : '#64748b', color: '#fff' } }, c.status)),
+      h('td', {}, h('span', { class: 'tag', style: { background: c.status === 'completed' ? '#10b981' : c.status === 'sending' ? '#b9f23c' : c.status === 'failed' ? '#ef4444' : '#64748b', color: '#fff' } }, c.status)),
       h('td', { class: 'muted' }, fmtDate(c.created_at, 'relative')),
       h('td', {},
         c.status === 'draft' || c.status === 'paused'
@@ -6583,7 +7286,7 @@ VIEWS.inventory = async (view) => {
     h('option', { value: 'sold' }, 'Sold'),
     h('option', { value: 'inactive' }, 'Inactive')
   );
-  const typeInput = h('input', { type: 'text', placeholder: 'Type filter (e.g. Flat, Plot)', style: { minWidth: '160px' } });
+  const typeInput = h('input', { type: 'text', placeholder: 'Type filter (e.g. Plan, Bundle)', style: { minWidth: '160px' } });
   head.appendChild(searchInput);
   head.appendChild(statusSel);
   head.appendChild(typeInput);
@@ -6668,7 +7371,7 @@ function openInventoryEditModal(r, onSaved) {
     ),
     h('form', { id: 'inv-form', class: 'form-grid' },
       f('name', 'Name *', r.name, { attrs: { type: 'text', required: 'required' } }),
-      f('item_type', 'Type (Flat / Plot / Plan / Product)', r.item_type),
+      f('item_type', 'Type (Plan / Bundle / Product)', r.item_type),
       f('price', 'Price (₹)', r.price, { attrs: { type: 'number', min: 0, step: 1 } }),
       h('div', { class: 'f-row' },
         h('label', {}, 'Status'),
@@ -6678,7 +7381,7 @@ function openInventoryEditModal(r, onSaved) {
           )
         )
       ),
-      f('location', 'Location / Address', r.location, { full: true }),
+      f('location', 'Tag / Category', r.location, { full: true }),
       h('div', { class: 'f-row full' },
         h('label', {}, 'Description'),
         h('textarea', { name: 'description', rows: 3 }, r.description || '')
@@ -6718,10 +7421,8 @@ VIEWS.projects = async (view) => {
       ? h('a', { class: 'btn', href: '#/admin', onclick: () => setTimeout(() => showAdminTab('projstages'), 100) }, '⚙ Edit stages')
       : null
   ));
-
   const listEl = h('div', { id: 'proj-board' }, h('div', { class: 'loading' }, 'Loading…'));
   view.appendChild(listEl);
-
   let board;
   try { board = await api('api_projectStages_board'); }
   catch (e) {
@@ -6729,14 +7430,12 @@ VIEWS.projects = async (view) => {
     listEl.appendChild(h('div', { class: 'error-box' }, e.message));
     return;
   }
-
   if (!board.stages.length) {
     listEl.innerHTML = '';
     listEl.appendChild(h('p', { class: 'muted' },
       'No stages defined yet. Admin: head to Settings → 🚚 Project stages to create your delivery workflow.'));
     return;
   }
-
   const totalLeads = board.board.reduce((n, col) => n + col.leads.length, 0);
   if (!totalLeads) {
     listEl.innerHTML = '';
@@ -6744,7 +7443,6 @@ VIEWS.projects = async (view) => {
       'No leads are in delivery yet. Open a won/closed lead → "🚚 Post-sale delivery" → Start delivery tracker.'));
     return;
   }
-
   const wrap = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '.75rem' } });
   board.board.forEach(col => {
     const stalledCount = col.leads.filter(l => l.stalled).length;
@@ -7495,7 +8193,7 @@ function renderDailyBreakdown(daily, filters) {
       data: {
         labels,
         datasets: [
-          { label: 'Total', data: daily.map(d => d.total),     borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,.1)', tension: .25, fill: true },
+          { label: 'Total', data: daily.map(d => d.total),     borderColor: '#b9f23c', backgroundColor: 'rgba(185,242,60,.15)', tension: .25, fill: true },
           { label: 'New',   data: daily.map(d => d.new_leads), borderColor: '#06b6d4', backgroundColor: 'rgba(6,182,212,.05)', tension: .25 },
           { label: 'Won',   data: daily.map(d => d.won),       borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,.05)', tension: .25 },
           { label: 'Lost',  data: daily.map(d => d.lost),      borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.05)',  tension: .25 }
@@ -7619,7 +8317,7 @@ function renderFunnel(containerId, stages) {
     const convPct  = top > 0 ? Math.round((c / top) * 100) : 0;
     const row = h('div', { class: 'rfun-row' },
       h('div', { class: 'rfun-track' },
-        h('div', { class: 'rfun-bar', style: { width: widthPct + '%', background: s.color || '#6366f1' } },
+        h('div', { class: 'rfun-bar', style: { width: widthPct + '%', background: s.color || '#b9f23c' } },
           h('span', { class: 'rfun-label' }, s.name),
           h('span', { class: 'rfun-count' }, String(c))
         )
@@ -8069,8 +8767,7 @@ VIEWS.admin = async (view) => {
     { id: 'chatperm',     label: '💬 Chat permissions' },
     { id: 'menu',         label: '🧭 Menu visibility' },
     { id: 'projstages',   label: '🚚 Project stages' },
-    { id: 'integrations', label: '🔌 Integrations' },
-    { id: 'dangerzone',   label: '🛑 Danger zone' }
+    { id: 'integrations', label: '🔌 Integrations' }
   ];
   const nav = h('div', { class: 'subtabs' },
     ...tabs.map(t => h('button', { class: 'subtab', 'data-tab': t.id, onclick: () => showAdminTab(t.id) }, t.label))
@@ -8104,92 +8801,14 @@ async function showAdminTab(id) {
     if (id === 'menu')     body.replaceChildren(await adminMenuVisibility());
     if (id === 'projstages') body.replaceChildren(await adminProjectStages());
     if (id === 'integrations') body.replaceChildren(await adminIntegrations());
-    if (id === 'dangerzone') body.replaceChildren(await adminDangerZone());
   } catch (e) { body.innerHTML = `<div class="error-box">${esc(e.message)}</div>`; }
 }
 
-/**
- * Admin → Danger zone tab. Currently hosts the "Wipe HR data" tool.
- *
- * Lets the admin permanently delete all rows in the Leaves, Tasks,
- * Attendance, and/or Salary tables. Lead/customer/user data is NOT
- * touched. Requires the admin to type "WIPE-NOW" exactly into the
- * confirmation field — anything else is rejected server-side.
- */
-async function adminDangerZone() {
-  const wrap = h('div', {});
-  const card = h('div', { class: 'card', style: { borderLeft: '4px solid #dc2626' } });
-  card.appendChild(h('h4', { style: { marginTop: 0, color: '#dc2626' } }, '🛑 Wipe HR data'));
-  card.appendChild(h('p', { class: 'muted' },
-    'Permanently delete all rows in the selected categories. ',
-    h('b', {}, 'This cannot be undone.'),
-    ' Lead, customer, and user accounts are not touched — only HR-side data.'
-  ));
-
-  const cats = [
-    { key: 'leaves',     label: 'Leaves data',     desc: 'Every applied/approved/rejected leave record' },
-    { key: 'tasks',      label: 'Tasks data',      desc: 'All tasks created in the Tasks module' },
-    { key: 'attendance', label: 'Attendance data', desc: 'Daily check-in/check-out logs + the linked location pings' },
-    { key: 'salary',     label: 'Salary data',     desc: 'Monthly salary records (the user.monthly_salary base figure on each user is preserved)' }
-  ];
-  const checks = {};
-  cats.forEach(c => {
-    checks[c.key] = h('input', { type: 'checkbox', value: c.key });
-    card.appendChild(h('label', { style: { display: 'flex', gap: '.5rem', alignItems: 'flex-start', padding: '.4rem 0' } },
-      checks[c.key],
-      h('span', {},
-        h('b', {}, c.label),
-        h('div', { class: 'muted', style: { fontSize: '.78rem' } }, c.desc)
-      )
-    ));
-  });
-
-  const confirmInput = h('input', { type: 'text', placeholder: 'Type WIPE-NOW to confirm', autocomplete: 'off',
-    style: { fontFamily: 'monospace', letterSpacing: '.05em' } });
-  card.appendChild(h('div', { class: 'f-row full', style: { marginTop: '1rem' } },
-    h('label', {}, 'Confirmation phrase'),
-    confirmInput
-  ));
-  card.appendChild(h('div', { class: 'actions', style: { marginTop: '.5rem' } },
-    h('button', { class: 'btn danger', onclick: async () => {
-      const picked = cats.filter(c => checks[c.key].checked).map(c => c.key);
-      if (!picked.length) { toast('Pick at least one category to wipe', 'err'); return; }
-      const phrase = confirmInput.value;
-      if (phrase !== 'WIPE-NOW') {
-        toast('Type WIPE-NOW exactly to confirm — case + dash matter', 'err');
-        confirmInput.focus();
-        return;
-      }
-      if (!await confirmDialog(`Permanently delete: ${picked.join(', ')}? This cannot be undone.`)) return;
-      try {
-        const r = await api('api_admin_wipeHrData', picked, phrase);
-        const msg = Object.entries(r.deleted || {})
-          .map(([k, v]) => `${k}: ${v}`)
-          .join(' · ');
-        toast('Wiped — ' + (msg || 'done'));
-        confirmInput.value = '';
-        cats.forEach(c => { checks[c.key].checked = false; });
-      } catch (e) { toast(e.message, 'err'); }
-    } }, '🗑️ Wipe selected data')
-  ));
-
-  wrap.appendChild(card);
-  return wrap;
-}
-
-/**
- * Admin → Integrations tab. Two sections:
- *  1. Lead-source webhooks — copy-paste URL per vendor (IndiaMART,
- *     MagicBricks, JustDial, TradeIndia, 99acres, Housing).
- *  2. Google Sheet sync — manage connected sheets.
- */
 async function adminIntegrations() {
   const cfg = await api('api_admin_getConfig').catch(() => ({}));
   const apiKey = cfg.WEBSITE_API_KEY || '';
   const base = location.origin;
   const wrap = h('div', {});
-
-  // --- Section 1: Lead-source webhooks ---
   wrap.appendChild(h('h4', { style: { margin: '0 0 .5rem' } }, '🌐 Lead-source webhooks'));
   if (!apiKey) {
     wrap.appendChild(h('p', { class: 'error-box' },
@@ -8216,10 +8835,8 @@ async function adminIntegrations() {
           h('div', { style: { fontWeight: 600 } }, s.label),
           h('div', { class: 'muted', style: { fontSize: '.78rem' } }, s.guide)
         ),
-        h('input', {
-          type: 'text', readonly: 'readonly', value: url,
-          style: { flex: '1 1 320px', fontFamily: 'monospace', fontSize: '.78rem' }
-        }),
+        h('input', { type: 'text', readonly: 'readonly', value: url,
+          style: { flex: '1 1 320px', fontFamily: 'monospace', fontSize: '.78rem' } }),
         h('button', { class: 'btn sm', onclick: ev => {
           const inp = ev.target.parentNode.querySelector('input');
           navigator.clipboard.writeText(inp.value).then(() => toast('Copied'), () => { inp.select(); document.execCommand('copy'); toast('Copied'); });
@@ -8228,8 +8845,6 @@ async function adminIntegrations() {
     });
     wrap.appendChild(list);
   }
-
-  // --- Section 2: Google Sheet sync ---
   wrap.appendChild(h('h4', { style: { margin: '1.5rem 0 .5rem' } }, '📊 Google Sheet sync'));
   wrap.appendChild(h('p', { class: 'muted' },
     'Connect a Google Sheet — set its share to "Anyone with link → Viewer" — and the CRM polls new rows as leads. Headers should match lead columns (name, phone, email, source, city, notes, etc.).'));
@@ -8268,8 +8883,6 @@ async function adminIntegrations() {
   wrap.appendChild(h('div', { class: 'actions', style: { marginTop: '.75rem' } },
     h('button', { class: 'btn primary', onclick: () => openSheetSyncEditModal(null, () => showAdminTab('integrations')) }, '+ Connect Google Sheet')
   ));
-
-  // --- Section 3: Gmail Apps Script (no native OAuth — show wizard) ---
   wrap.appendChild(h('h4', { style: { margin: '1.5rem 0 .5rem' } }, '✉ Gmail → CRM (via Apps Script)'));
   wrap.appendChild(h('p', { class: 'muted' },
     'For sources that send leads via email (IndiaMART/MagicBricks email notifications, contact-form replies). Free, runs in your Google account, takes ~3 min to set up.'));
@@ -8315,7 +8928,6 @@ function importGmailLeads() {
       ta.select(); navigator.clipboard.writeText(script).then(() => toast('Copied'), () => { document.execCommand('copy'); toast('Copied'); });
     } }, '📋 Copy script'));
   }
-
   return wrap;
 }
 
@@ -8324,15 +8936,15 @@ function openSheetSyncEditModal(s, onSaved) {
   const sheetUrlValue = s.sheet_id ? `https://docs.google.com/spreadsheets/d/${s.sheet_id}/edit#gid=${s.sheet_gid || '0'}` : '';
   const users = (CRM.cache.users || []).filter(u => Number(u.is_active) === 1);
   const pushUrl = s.webhook_token ? location.origin + '/hook/sheet/' + s.webhook_token : '';
-  const pushScript = pushUrl ? `// Paste this into your sheet: Extensions → Apps Script → replace the
-// default code with this → Save → Triggers (clock icon) → Add Trigger:
+  const pushScript = pushUrl ? `// Paste this into your sheet: Extensions → Apps Script → replace
+// the default code → Save → Triggers (clock icon) → Add Trigger:
 //   Function = pushNewRowsToCRM, Event = Time-driven, every 5 min.
 // Add a column called "CRM_Sent" — the script writes ✓ there once a
 // row has been sent so it never sends the same row twice.
 //
-// SHEET STAYS FULLY PRIVATE — the script runs as you (the sheet owner)
-// and POSTs each new row to the unique URL below. No "Anyone with link"
-// sharing required.
+// SHEET STAYS FULLY PRIVATE — the script runs as you (the sheet
+// owner) and POSTs each new row to the unique URL below. No
+// "Anyone with link" sharing required.
 const CRM_WEBHOOK = '${pushUrl}';
 
 function pushNewRowsToCRM() {
@@ -8401,8 +9013,6 @@ function pushNewRowsToCRM() {
         const payload = {
           id: s.id,
           name: fd.get('name'),
-          // sheet_url is intentionally optional now — push mode (script
-          // in private sheet) is the recommended path.
           sheet_url: '',
           poll_interval_min: 15,
           default_source: fd.get('default_source'),
@@ -8414,8 +9024,6 @@ function pushNewRowsToCRM() {
           const r = await api('api_sheetSync_save', payload);
           toast('Saved');
           modal.remove();
-          // Re-open the modal in edit mode so the user can see the
-          // freshly-generated webhook URL + script
           if (!s.id) {
             const fresh = (await api('api_sheetSync_list')).find(x => Number(x.id) === Number(r.id));
             if (fresh) openSheetSyncEditModal(fresh, onSaved);
@@ -8426,7 +9034,6 @@ function pushNewRowsToCRM() {
         } catch (e) { toast(e.message, 'err'); }
       } }, 'Save')
     ),
-    // After save, the integration has a token — show the push setup
     pushUrl ? h('div', { style: { padding: '1rem', borderTop: '1px solid #e5e7eb', background: '#f9fafb' } },
       h('h4', { style: { margin: '0 0 .5rem' } }, '🔒 Recommended: Push from your sheet (sheet stays private)'),
       h('p', { class: 'muted', style: { fontSize: '.82rem' } },
@@ -8488,12 +9095,6 @@ function pushNewRowsToCRM() {
   document.body.appendChild(modal);
 }
 
-/**
- * Admin → Project stages tab. Lists every stage in sort order with edit /
- * delete actions, plus a "+ New stage" button. Stages are the post-sale
- * delivery workflow (Token → Agreement → Loan → ... → Possession).
- * Reps advance leads through these stages from the lead detail modal.
- */
 async function adminProjectStages() {
   const stages = await api('api_projectStages_list');
   const wrap = h('div', {});
@@ -8539,11 +9140,11 @@ function openProjectStageEditModal(s, onSaved) {
     h('form', { id: 'pst-form', class: 'form-grid' },
       h('div', { class: 'f-row full' },
         h('label', {}, 'Name *'),
-        h('input', { name: 'name', value: s.name || '', required: 'required', placeholder: 'e.g. Agreement signed' })
+        h('input', { name: 'name', value: s.name || '', required: 'required', placeholder: 'e.g. Onboarding call done' })
       ),
       h('div', { class: 'f-row full' },
         h('label', {}, 'Description'),
-        h('textarea', { name: 'description', rows: 2, placeholder: 'What needs to happen at this stage?' }, s.description || '')
+        h('textarea', { name: 'description', rows: 2 }, s.description || '')
       ),
       h('div', { class: 'f-row' },
         h('label', {}, 'Sort order *'),
@@ -8584,14 +9185,6 @@ function openProjectStageEditModal(s, onSaved) {
   document.body.appendChild(modal);
 }
 
-/**
- * Admin → Menu visibility tab. Lets the admin tick which sidebar items
- * are visible for everyone in this tenant. Saves to config.HIDDEN_NAV_IDS
- * as a CSV. The frontend reads it from /config.json on next load and
- * filters NAV accordingly. Three quick-action items (newleads, overdue,
- * upcoming) live as chips in the topbar regardless — hiding them just
- * removes the duplicate sidebar entries.
- */
 async function adminMenuVisibility() {
   const cfg = await api('api_admin_getConfig');
   const hidden = new Set(String(cfg.HIDDEN_NAV_IDS || 'newleads,overdue,duetoday,upcoming,dialer')
@@ -9579,7 +10172,7 @@ async function adminStatuses() {
     catch (e) { toast(e.message, 'err'); }
   }},
     h('input', { name: 'n', placeholder: 'Status name', required: true }),
-    h('input', { name: 'c', type: 'color', value: '#6366f1' }),
+    h('input', { name: 'c', type: 'color', value: '#b9f23c' }),
     h('input', { name: 'o', type: 'number', placeholder: 'Order', value: 100, style: { width: '70px' } }),
     h('label', { class: 'cb' }, h('input', { name: 'fi', type: 'checkbox' }), ' Final'),
     h('button', { type: 'submit', class: 'btn primary' }, '+ Add status')
@@ -9594,7 +10187,7 @@ async function adminStatuses() {
 async function adminTags() {
   const wrap = h('div', {});
   const tags = await api('api_tags_list');
-  const colorPick = h('input', { type: 'color', value: '#6366f1', style: { width: '50px' } });
+  const colorPick = h('input', { type: 'color', value: '#b9f23c', style: { width: '50px' } });
   const nameInput = h('input', { placeholder: 'Tag name (e.g. VIP, Hot, Cold)', style: { flex: '1' } });
   wrap.appendChild(h('div', { class: 'card' },
     h('h3', {}, 'Add a new tag'),
@@ -9830,37 +10423,6 @@ function buildCustomFieldForm(initial, onSave, submitLabel, onCancel) {
   return form;
 }
 async function adminRules() {
-  const wrap = h('div', {});
-
-  // ---- Auto-dial toggle (push "📞 tap to call" to assignee on new lead) ----
-  try {
-    const cfg = await api('api_admin_getConfig');
-    const autoOn = String(cfg.LEAD_AUTODIAL_ON || '1') === '1';
-    const adCard = h('div', { class: 'card', style: { marginBottom: '1rem' } });
-    adCard.appendChild(h('h4', { style: { marginTop: 0 } }, '📞 Auto-dial on new lead'));
-    adCard.appendChild(h('p', { class: 'muted' },
-      'When a new lead lands (from any source — webhook, manual entry, CSV upload), push a ',
-      h('b', {}, 'Tap to call'),
-      ' notification to the assignee\'s mobile. Tapping the notification opens the dialer with the lead\'s number pre-filled. ',
-      h('b', {}, 'Skipped for admins'),
-      ' (admins don\'t work the pipeline) and any rep who has turned auto-dial off in their own profile (Users → Edit → Auto-dial preference). Also skipped for leads moved to Junk.'));
-    adCard.appendChild(h('label', { class: 'toggle-row', style: { display: 'flex', alignItems: 'center', gap: '.5rem' } },
-      h('input', { type: 'checkbox', checked: autoOn ? 'checked' : null,
-        onchange: async ev => {
-          try {
-            await api('api_admin_setConfig', { LEAD_AUTODIAL_ON: ev.target.checked ? '1' : '0' });
-            toast(ev.target.checked ? 'Auto-dial ON' : 'Auto-dial OFF');
-          } catch (e) {
-            toast(e.message, 'err');
-            ev.target.checked = !ev.target.checked;
-          }
-        }
-      }),
-      h('span', {}, 'Auto-dial enabled — assignee gets a tap-to-call push for every new lead')
-    ));
-    wrap.appendChild(adCard);
-  } catch (_) { /* config endpoint missing — older deploy, skip silently */ }
-
   const rules = await api('api_rules_list');
   const card = h('div', { class: 'card' }, h('h4', {}, 'Auto-assign rules'));
   card.appendChild(h('p', { class: 'muted' }, 'First matching rule (by lowest priority number) wins. Assigning multiple users enables round-robin.'));
@@ -9887,8 +10449,7 @@ async function adminRules() {
   card.appendChild(h('div', { class: 'actions', style: { marginTop: '1rem' } },
     h('button', { class: 'btn primary', onclick: () => openRuleModal() }, '+ New rule')
   ));
-  wrap.appendChild(card);
-  return wrap;
+  return card;
 }
 function openRuleModal(existing) {
   const { users } = CRM.cache;
@@ -10129,37 +10690,11 @@ async function openUserModal(u) {
         field('daily_lead_cap',   'Daily cap (leads/day)',    u.daily_lead_cap   || 0, { type: 'number', min: 0 }),
         field('monthly_lead_cap', 'Monthly cap (leads/month)', u.monthly_lead_cap || 0, { type: 'number', min: 0 }),
 
-        // Scheduling — when set, "📅 Send meeting link" buttons on
-        // leads/customers prefill WhatsApp with this URL so prospects
-        // pick a time directly.
         section('📅 Scheduling'),
         h('div', { class: 'f-row full' },
           h('p', { class: 'muted', style: { margin: 0, fontSize: '.82rem' } },
             'Paste your Calendly (or any scheduling) URL here. The CRM uses it as a "Send meeting link" shortcut on every lead and customer.')),
         field('calendly_url', 'Calendly link', u.calendly_url, { type: 'url', placeholder: 'https://calendly.com/yourname/30min' }),
-
-        // Auto-dial — let each rep choose whether to receive the
-        // "📞 Tap to call" push when a new lead lands assigned to them.
-        // Default ON for new users. Hidden for admins (admins are skipped
-        // server-side regardless — they're not the ones working leads).
-        u.role !== 'admin' ? section('📞 Auto-dial preference') : null,
-        u.role !== 'admin' ? h('div', { class: 'f-row full' },
-          h('label', { class: 'toggle-row', style: { display: 'flex', alignItems: 'center', gap: '.5rem' } },
-            h('input', {
-              type: 'checkbox',
-              name: 'autodial_on',
-              value: '1',
-              checked: Number(u.autodial_on != null ? u.autodial_on : 1) === 1 ? 'checked' : null
-            }),
-            h('span', {}, 'Send me a "Tap to call" push on every new lead assigned to me')
-          )
-        ) : null,
-        u.role !== 'admin' ? h('div', { class: 'f-row full' },
-          h('p', { class: 'muted', style: { margin: 0, fontSize: '.78rem' } },
-            'When this is on and the tenant-wide auto-dial is enabled, the CRM pushes a notification to your mobile every time a new lead is assigned to you. Tap the notification → dialer opens with the number ready.')
-        ) : null,
-        // Webhook URL — visible only when editing your own profile (or
-        // admin editing someone else). Read-only display + Copy + Regen.
         (u.id && Number(u.id) === Number(CRM.user.id)) ? h('div', { class: 'f-row full' },
           h('label', {}, 'Calendly webhook URL'),
           h('p', { class: 'muted', style: { margin: '0 0 .4rem', fontSize: '.78rem' } },
@@ -10177,8 +10712,7 @@ async function openUserModal(u) {
               if (!await confirmDialog('Generate a new webhook URL? The old one will stop working — you\'ll need to update it in Calendly.')) return;
               try {
                 const r = await api('api_users_regenerateCalendlyWebhook');
-                const url = location.origin + '/hook/calendly/' + r.token;
-                $('#calendly-webhook-input').value = url;
+                $('#calendly-webhook-input').value = location.origin + '/hook/calendly/' + r.token;
                 toast('New URL generated — paste it back into Calendly');
               } catch (e) { toast(e.message, 'err'); }
             } }, '↻ Regenerate')
@@ -10251,8 +10785,7 @@ async function openUserModal(u) {
             reference_2_relation:    fd.get('reference_2_relation')    || '',
             daily_lead_cap:          Number(fd.get('daily_lead_cap'))   || 0,
             monthly_lead_cap:        Number(fd.get('monthly_lead_cap')) || 0,
-            calendly_url:            fd.get('calendly_url')            || '',
-            autodial_on:             fd.get('autodial_on') ? 1 : 0
+            calendly_url:            fd.get('calendly_url')            || ''
           };
           if (!u.id) payload.password = fd.get('password');
           try { await api('api_users_save', payload); toast('Saved'); modal.remove(); await warmCache(); navigateTo('users'); }
@@ -10262,8 +10795,6 @@ async function openUserModal(u) {
     )
   );
   document.body.appendChild(modal);
-  // Fetch and render the Calendly webhook URL (only shown when editing
-  // your own profile — see #calendly-webhook-input above).
   if (u.id && Number(u.id) === Number(CRM.user.id)) {
     api('api_users_calendlyWebhook').then(r => {
       const inp = document.getElementById('calendly-webhook-input');
@@ -10875,7 +11406,7 @@ async function openAttendanceMap(r) {
       L.marker(c).addTo(map).bindPopup(outHtml);
       pts.push(c);
     }
-    if (pts.length === 2) L.polyline(pts, { color: '#6366f1', weight: 3 }).addTo(map);
+    if (pts.length === 2) L.polyline(pts, { color: '#b9f23c', weight: 3 }).addTo(map);
     if (pts.length) map.fitBounds(pts, { padding: [30, 30], maxZoom: 16 });
     else map.setView([20, 78], 4);
   }, 50);
