@@ -581,7 +581,10 @@ async function seedDemo() {
     }
 
     const recCount = (await db.getAll('lead_recordings').catch(() => [])).length;
-    if (recCount < 5) {
+    // Bumped threshold from 5 → 50 so the existing 35-recording seed
+    // re-runs once with the new wider distribution (recordings now go
+    // to lead's assignee + spread across 80 leads instead of 35).
+    if (recCount < 50) {
       const allLeads = await db.getAll('leads').catch(() => []);
       const statuses = await db.getAll('statuses').catch(() => []);
       const sIdByName = Object.fromEntries(statuses.map(s => [String(s.name).toLowerCase(), s.id]));
@@ -671,15 +674,19 @@ async function seedDemo() {
         };
       }
 
-      // Spread 35 recordings over 30 days, mostly on the most-recent leads
-      const NUM_RECORDINGS = 35;
-      const recentLeads = allLeads.slice(0, 60);
+      // Spread 70 recordings — most active leads get one, some get two.
+      // Recording's user_id = lead's assignee, so when a rep logs in,
+      // the recordings on their leads are theirs (matches realistic
+      // workflow + demo discoverability — every rep sees recordings
+      // on their own leads).
+      const NUM_RECORDINGS = 70;
+      const recentLeads = allLeads.slice(0, 80);
       let inserted = 0;
-      for (let i = 0; i < NUM_RECORDINGS && i < recentLeads.length; i++) {
-        const lead = recentLeads[i];
+      for (let i = 0; i < NUM_RECORDINGS && i < recentLeads.length * 2; i++) {
+        const lead = recentLeads[i % recentLeads.length];
         const tpl = TEMPLATES[i % TEMPLATES.length];
         const dur = rand(45, 480);                      // 45s to 8 min
-        const repId = pick(repIds);
+        const repId = lead.assigned_to || pick(repIds);
         const createdDay = daysAgo(rand(0, 28));
         // 700 output tokens average per call summary
         const cost = _cost(dur, rand(550, 850));

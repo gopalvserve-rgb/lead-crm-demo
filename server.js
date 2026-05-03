@@ -123,7 +123,7 @@ if (demo.on) {
         db.getAll('chat_rooms').catch(() => []),
         db.getAll('lead_recordings').catch(() => [])
       ]);
-      const fullySeeded = leads.length > 5 && customers.length > 2 && inventory.length > 2 && chatRooms.length > 0 && recordings.length > 5;
+      const fullySeeded = leads.length > 5 && customers.length > 2 && inventory.length > 2 && chatRooms.length > 0 && recordings.length >= 50;
       if (fullySeeded) {
         console.log('[demo-seed] already fully seeded —', leads.length, 'leads,', customers.length, 'customers, skipping');
         return;
