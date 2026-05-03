@@ -80,6 +80,39 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ----- Demo-mode helpers -----
 const demo = require('./utils/demoGuard');
+
+// One-shot demo seed: when DEMO_MODE=1 and the leads table is empty,
+// run the demo seed in the background after the server boots so it
+// doesn't block the healthcheck. Idempotent — checks lead count first.
+if (demo.on) {
+  setTimeout(() => {
+    (async () => {
+      try {
+        const db = require('./db/pg');
+        const leads = await db.getAll('leads').catch(() => []);
+        if (leads.length > 5) {
+          console.log('[demo-seed] already seeded —', leads.length, 'leads — skipping');
+          return;
+        }
+        console.log('[demo-seed] running seed-demo in background...');
+        // Use child_process so the seed can call process.exit safely without
+        // killing this server process.
+        const { spawn } = require('child_process');
+        const child = spawn('node', ['db/seed-demo.js'], {
+          env: process.env,
+          stdio: 'inherit',
+          detached: false
+        });
+        child.on('exit', (code) => {
+          console.log('[demo-seed] finished with code', code);
+        });
+      } catch (e) {
+        console.error('[demo-seed] failed to start:', e.message);
+      }
+    })();
+  }, 5000);
+}
+
 // Boolean flag the SPA reads on every load. Lets the UI hide destructive
 // buttons / show the demo banner without baking flags into the bundle.
 app.get('/demo-status', (_req, res) => {
