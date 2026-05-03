@@ -27,6 +27,7 @@ const CONFIG_KEYS = [
   // Auto-dial: when a new lead is created, push a "📞 Tap to call" notification
   // to the assignee's mobile in addition to the standard "lead assigned" alert.
   'LEAD_AUTODIAL_ON',
+  'AI_TRANSCRIPTION_ENABLED',
   'SHOW_LEADS_HEADER',
   // CSV of NAV item IDs the admin has hidden in the sidebar for this tenant.
   // E.g. "newleads,overdue,upcoming,whatsbot" hides those four entries.

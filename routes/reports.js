@@ -686,9 +686,52 @@ async function api_calendar_events(token, opts) {
   return events;
 }
 
+async function api_reports_callRatingByUser(token, filters) {
+  const me = await authUser(token);
+  filters = filters || {};
+  const where = ['lr.user_id IS NOT NULL'];
+  const params = [];
+  let p = 1;
+  if (filters.from) { where.push(`lr.created_at >= $${p++}`); params.push(filters.from); }
+  if (filters.to)   { where.push(`lr.created_at <= $${p++}`); params.push(filters.to);   }
+  if (filters.userId) { where.push(`lr.user_id = $${p++}`); params.push(Number(filters.userId)); }
+  if (me.role === 'sales' || me.role === 'employee') {
+    where.push(`lr.user_id = $${p++}`); params.push(me.id);
+  } else if (me.role === 'team_leader') {
+    where.push(`(lr.user_id = $${p} OR lr.user_id IN (SELECT id FROM users WHERE parent_id = $${p}))`);
+    params.push(me.id); p++;
+  }
+  const sql = `
+    SELECT
+      lr.user_id, u.name AS user_name, u.role AS user_role,
+      COUNT(*)::int AS total_calls,
+      COUNT(lr.rating)::int AS rated_calls,
+      ROUND(AVG(NULLIF(lr.rating,0))::numeric, 2)::float AS avg_rating,
+      ROUND(AVG(NULLIF(lr.ai_suggested_rating,0))::numeric, 2)::float AS avg_ai_rating,
+      COUNT(*) FILTER (WHERE lr.rating = 1)::int AS r1,
+      COUNT(*) FILTER (WHERE lr.rating = 2)::int AS r2,
+      COUNT(*) FILTER (WHERE lr.rating = 3)::int AS r3,
+      COUNT(*) FILTER (WHERE lr.rating = 4)::int AS r4,
+      COUNT(*) FILTER (WHERE lr.rating = 5)::int AS r5,
+      MAX(lr.created_at) AS last_call_at
+    FROM lead_recordings lr LEFT JOIN users u ON u.id = lr.user_id
+    WHERE ${where.join(' AND ')}
+    GROUP BY lr.user_id, u.name, u.role
+    ORDER BY total_calls DESC, avg_rating DESC NULLS LAST
+  `;
+  try { const { rows } = await db.query(sql, params); return rows; }
+  catch (e) {
+    if (/column .* does not exist/i.test(e.message)) {
+      return { error: 'Rating columns not migrated yet — restart the service to apply schema.', rows: [] };
+    }
+    throw e;
+  }
+}
+
 module.exports = {
   api_reports_summary, api_reports_funnel, api_reports_daily,
   api_reports_exportLeads, api_reports_groupBy,
   api_reports_followupsByUser, api_reports_tatViolationsByUser,
-  api_calendar_events
+  api_calendar_events,
+  api_reports_callRatingByUser
 };
