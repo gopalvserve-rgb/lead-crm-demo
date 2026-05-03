@@ -556,6 +556,30 @@ async function seedDemo() {
     // each with a full transcript, summary, action items, suggested
     // status, manual rating, AI-suggested rating, plus token counts and
     // realistic vendor cost so the AI Usage view shows believable numbers.
+    // Backfill cost columns on any existing recordings whose cost is null —
+    // happens when seed ran before pg.js whitelist was updated.
+    try {
+      await db.query(
+        `UPDATE lead_recordings
+            SET ai_input_tokens  = COALESCE(ai_input_tokens, GREATEST(duration_s, 1) * 32),
+                ai_output_tokens = COALESCE(ai_output_tokens, 700),
+                ai_cost_usd      = COALESCE(ai_cost_usd,
+                                       (GREATEST(duration_s,1)*32)/1000000.0 * 0.30
+                                     + 700/1000000.0 * 2.50),
+                ai_cost_inr      = COALESCE(ai_cost_inr,
+                                       ((GREATEST(duration_s,1)*32)/1000000.0 * 0.30
+                                       + 700/1000000.0 * 2.50) * 84)
+          WHERE ai_provider IS NOT NULL
+            AND (ai_cost_inr IS NULL OR ai_cost_inr = 0)`
+      );
+      console.log('✓ Backfilled missing AI cost values on existing recordings');
+    } catch (e) {
+      // Schema not migrated yet — skip silently.
+      if (!/column .* does not exist/i.test(e.message)) {
+        console.warn('[demo-seed] cost backfill skipped:', e.message);
+      }
+    }
+
     const recCount = (await db.getAll('lead_recordings').catch(() => [])).length;
     if (recCount < 5) {
       const allLeads = await db.getAll('leads').catch(() => []);
