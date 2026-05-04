@@ -1060,6 +1060,15 @@ VIEWS.leads = async (view) => {
       { id: 'only', name: '⚠️ Duplicates only' },
       { id: 'unique', name: 'No duplicates' }
     ], CRM.prefs.filters.duplicate)),
+    // Sort: newest/oldest by created_at, or by last-updated. Default
+    // 'created_desc' matches the previous hard-coded behaviour so saved
+    // filters from before this option keep working unchanged.
+    wireFilter(selectOpts('f-sort', [
+      { id: 'created_desc', name: '🆕 Created — newest first' },
+      { id: 'created_asc',  name: '⏳ Created — oldest first' },
+      { id: 'updated_desc', name: '✏️ Updated — newest first' },
+      { id: 'updated_asc',  name: '⏳ Updated — oldest first' }
+    ], CRM.prefs.filters.sort || 'created_desc')),
     h('button', { class: 'btn', onclick: () => { CRM._leadsPage = 1; loadLeads({ page: 1 }); } }, '🔎'),
     h('button', { class: 'btn ghost', onclick: openSavedFiltersMenu, title: 'Saved filter presets' }, '📌'),
     h('button', { class: 'btn ghost', onclick: clearFilters, title: 'Reset filters' }, '✕'),
@@ -1218,6 +1227,7 @@ async function loadLeads(opts) {
     followup:    $('#f-followup')?.value || undefined,
     qualified:   $('#f-qualified')?.value || undefined,
     duplicate:   $('#f-duplicate')?.value || undefined,
+    sort:        $('#f-sort')?.value || undefined,
     page,
     page_size:   pageSize
   };
