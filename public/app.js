@@ -500,40 +500,59 @@ function showOtpStep(challengeToken, who) {
 }
 
 /* ---------------- Shell ---------------- */
-const NAV = [
-  { id: 'dashboard',  label: 'Dashboard',    icon: '📊' },
-  { id: 'leads',      label: 'Leads',        icon: '🎯' },
-  { id: 'customers',  label: 'Customers',    icon: '🤝' },
-  { id: 'custreports', label: 'Cust. reports', icon: '💹', roles: ['admin', 'manager', 'team_leader'] },
-  { id: 'newleads',   label: 'New leads',    icon: '✨', countKey: 'new_today' },
-  { id: 'overdue',    label: 'Overdue',      icon: '⚠️', countKey: 'overdue' },
-  { id: 'duetoday',   label: 'Due today',    icon: '📅', countKey: 'due_today' },
-  { id: 'upcoming',   label: 'Upcoming',     icon: '⏰', countKey: 'upcoming' },
-  { id: 'dialer',     label: 'Dialer',       icon: '📞' },
-  { id: 'pipeline',   label: 'Pipeline',     icon: '📈' },
-  { id: 'kanban',     label: 'Kanban',       icon: '🗂️' },
-  { id: 'followups',  label: 'Follow-ups',   icon: '🔔' },
-  { id: 'calendar',   label: 'Calendar',     icon: '📅' },
-  { id: 'targets',    label: 'Monthly Target', icon: '🎯' },
-  { id: 'inventory',  label: 'Inventory',    icon: '📦' },
-  { id: 'projects',   label: 'Projects',     icon: '🚚' },
-  { id: 'reports',    label: 'Reports',      icon: '📉', roles: ['admin', 'manager', 'team_leader'] },
-  { id: 'reportbuilder', label: 'Report builder', icon: '🧪', roles: ['admin', 'manager', 'team_leader'] },
-  { id: 'tatreport',  label: 'TAT report',   icon: '⏱️', roles: ['admin', 'manager', 'team_leader'] },
-  { id: 'callratings', label: 'Call ratings', icon: '⭐', roles: ['admin', 'manager', 'team_leader'] },
-  { id: 'callinsights', label: 'Call insights', icon: '🎙' },
-  { id: 'aiusage',     label: 'AI usage',     icon: '🤖', roles: ['admin', 'manager'] },
-  { id: 'whatsbot',   label: 'WhatsBot',     icon: '💬' },
-  { id: 'knowledge',  label: 'Knowledge',    icon: '📚' },
-  { id: 'teamchat',   label: 'Team chat',    icon: '👥', countKey: 'chat_unread' },
-  { id: 'tasks',      label: 'Tasks',        icon: '✅' },
-  { id: 'attendance', label: 'Attendance',   icon: '🕒' },
-  { id: 'leaves',     label: 'Leaves',       icon: '🏖️' },
-  { id: 'salary',     label: 'Salary',       icon: '💰' },
-  { id: 'bank',       label: 'Bank',         icon: '🏦' },
-  { id: 'users',      label: 'Users',        icon: '👥', roles: ['admin', 'manager'] },
-  { id: 'admin',      label: 'Settings',     icon: '⚙️', roles: ['admin'] }
+// Sidebar is grouped into collapsible sections (à la Zoho) to keep the menu
+// compact. Default = collapsed; user clicks a group header to expand it.
+const NAV_GROUPS = [
+  { label: '', items: [
+    { id: 'dashboard', label: 'Dashboard', icon: '📊', pinned: true }
+  ] },
+  { label: 'Sales', icon: '💼', items: [
+    { id: 'leads',       label: 'Leads',          icon: '🎯' },
+    { id: 'customers',   label: 'Customers',      icon: '🤝' },
+    { id: 'custreports', label: 'Cust. reports',  icon: '💹', roles: ['admin', 'manager', 'team_leader'] },
+    { id: 'pipeline',    label: 'Pipeline',       icon: '📈' },
+    { id: 'kanban',      label: 'Kanban',         icon: '🗂️' },
+    { id: 'followups',   label: 'Follow-ups',     icon: '🔔' },
+    { id: 'calendar',    label: 'Calendar',       icon: '📅' },
+    { id: 'targets',     label: 'Monthly Target', icon: '🎯' },
+    { id: 'newleads',    label: 'New leads',      icon: '✨', countKey: 'new_today' },
+    { id: 'overdue',     label: 'Overdue',        icon: '⚠️', countKey: 'overdue' },
+    { id: 'duetoday',    label: 'Due today',      icon: '📅', countKey: 'due_today' },
+    { id: 'upcoming',    label: 'Upcoming',       icon: '⏰', countKey: 'upcoming' }
+  ] },
+  { label: 'Calls', icon: '📞', items: [
+    { id: 'dialer',       label: 'Dialer',        icon: '📞' },
+    { id: 'callinsights', label: 'Call insights', icon: '🎙' },
+    { id: 'callratings',  label: 'Call ratings',  icon: '⭐', roles: ['admin', 'manager', 'team_leader'] },
+    { id: 'aiusage',      label: 'AI usage',      icon: '🤖', roles: ['admin', 'manager'] }
+  ] },
+  { label: 'Catalog', icon: '📦', items: [
+    { id: 'inventory', label: 'Inventory', icon: '📦' },
+    { id: 'projects',  label: 'Projects',  icon: '🚚' }
+  ] },
+  { label: 'Reports', icon: '📉', items: [
+    { id: 'reports',       label: 'Reports',         icon: '📉', roles: ['admin', 'manager', 'team_leader'] },
+    { id: 'reportbuilder', label: 'Report builder',  icon: '🧪', roles: ['admin', 'manager', 'team_leader'] },
+    { id: 'tatreport',     label: 'TAT report',      icon: '⏱️', roles: ['admin', 'manager', 'team_leader'] }
+  ] },
+  { label: 'Workspace', icon: '💬', items: [
+    { id: 'whatsbot',  label: 'WhatsBot',  icon: '💬' },
+    { id: 'knowledge', label: 'Knowledge', icon: '📚' },
+    { id: 'teamchat',  label: 'Team chat', icon: '👥', countKey: 'chat_unread' }
+  ] },
+  { label: 'HR & Me', icon: '🕒', items: [
+    { id: 'tasks',      label: 'Tasks',      icon: '✅' },
+    { id: 'attendance', label: 'Attendance', icon: '🕒' },
+    { id: 'leaves',     label: 'Leaves',     icon: '🏖️' },
+    { id: 'salary',     label: 'Salary',     icon: '💰' },
+    { id: 'bank',       label: 'Bank',       icon: '🏦' }
+  ] },
+  { label: 'Admin', icon: '⚙️', items: [
+    { id: 'users', label: 'Users',    icon: '👥', roles: ['admin', 'manager'] },
+    { id: 'admin', label: 'Settings', icon: '⚙️', roles: ['admin'] }
+  ] }
 ];
+const NAV = NAV_GROUPS.flatMap(g => g.items);
 
 function renderShell() {
   const initials = (CRM.user.name || '?').split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
@@ -585,21 +604,56 @@ function renderShell() {
   // now live as chips in the topbar.
   const hiddenNavIds = String(CRM.config.hidden_nav_ids || 'newleads,overdue,duetoday,upcoming,dialer')
     .split(',').map(s => s.trim()).filter(Boolean);
-  NAV.forEach(item => {
-    if (item.roles && !item.roles.includes(CRM.user.role)) return;
-    if (hiddenNavIds.includes(item.id)) return;
-    // Hide Team chat for users whose role admin has disabled chat for.
-    // CRM.access.can_chat is fetched right after login.
-    if (item.id === 'teamchat' && CRM.access && CRM.access.can_chat === false) return;
-    // Count badge — populated later by refreshNavCounts() when notifications load.
+
+  const _navAnchor = (item) => {
+    if (item.roles && !item.roles.includes(CRM.user.role)) return null;
+    if (hiddenNavIds.includes(item.id)) return null;
+    if (item.id === 'teamchat' && CRM.access && CRM.access.can_chat === false) return null;
     const countBadge = item.countKey
       ? h('span', { class: 'nav-count', 'data-count-key': item.countKey, hidden: 'hidden' }, '0')
       : null;
-    const a = h('a', { href: '#/' + item.id, 'data-view': item.id },
+    return h('a', { href: '#/' + item.id, 'data-view': item.id },
       h('span', { class: 'nav-icon' }, item.icon),
       h('span', {}, item.label),
       countBadge);
-    nav.appendChild(a);
+  };
+
+  // Default = collapsed. User clicks a header to expand. Choices persist.
+  const expandedKey = 'crm_nav_expanded_v1';
+  const expanded = new Set((localStorage.getItem(expandedKey) || '').split(',').filter(Boolean));
+  const _saveExpanded = () => localStorage.setItem(expandedKey, [...expanded].join(','));
+
+  NAV_GROUPS.forEach(group => {
+    const anchors = group.items.map(_navAnchor).filter(Boolean);
+    if (!anchors.length) return;
+    if (!group.label) { anchors.forEach(a => nav.appendChild(a)); return; }
+    const groupHasActive = group.items.some(i => i.id === (location.hash.replace('#/', '') || 'dashboard'));
+    const isCollapsed = !(expanded.has(group.label) || groupHasActive);
+    const groupEl = h('div', { class: 'nav-group' + (isCollapsed ? ' collapsed' : '') });
+    const headBtn = h('button', {
+      class: 'nav-group-head', type: 'button',
+      onclick: () => {
+        groupEl.classList.toggle('collapsed');
+        if (groupEl.classList.contains('collapsed')) expanded.delete(group.label);
+        else expanded.add(group.label);
+        _saveExpanded();
+      }
+    },
+      h('span', { class: 'nav-group-icon' }, group.icon || ''),
+      h('span', { class: 'nav-group-label' }, group.label),
+      h('span', { class: 'nav-group-chev' }, '▾')
+    );
+    const itemsWrap = h('div', { class: 'nav-group-items' });
+    anchors.forEach(a => itemsWrap.appendChild(a));
+    groupEl.appendChild(headBtn);
+    groupEl.appendChild(itemsWrap);
+    nav.appendChild(groupEl);
+  });
+
+  NAV.forEach(item => {
+    if (item.roles && !item.roles.includes(CRM.user.role)) return;
+    if (hiddenNavIds.includes(item.id)) return;
+    if (item.id === 'teamchat' && CRM.access && CRM.access.can_chat === false) return;
     if (mobilePrimary.includes(item.id)) {
       const ma = h('a', { href: '#/' + item.id, 'data-view': item.id },
         h('span', { class: 'bn-ico' }, item.icon),
